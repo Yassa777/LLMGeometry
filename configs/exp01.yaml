@@ -1,0 +1,15 @@
+run:
+  device: cpu
+model:
+  name: distilgpt2
+geometry:
+  shrinkage: 0.05
+  lda_shrinkage: 0.10
+concepts:
+  file: runs/exp01/concept_hierarchies.json
+data:
+  activations: runs/exp01/activations.h5
+logging:
+  save_dir: runs/exp01
+eval:
+  angle_threshold_deg: 80

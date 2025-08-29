@@ -1,0 +1,7 @@
+inputs:
+  geometry: runs/exp01/geometry.pt
+  teacher_vectors: runs/exp01/teacher_vectors.json
+logging:
+  save_dir: runs/exp02
+eval:
+  alphas: [0.5, 1.0, 2.0]

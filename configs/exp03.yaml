@@ -1,0 +1,5 @@
+inputs:
+  geometry: runs/exp01/geometry.pt
+  teacher_vectors: runs/exp01/teacher_vectors.json
+logging:
+  save_dir: runs/exp03
