@@ -22,6 +22,9 @@ HF models and a simple Phase-1-style pipeline.
 - `pip install -r requirements.txt`
 - Run Experiment 1 (angles + geometry validation):
   - `python experiments/exp01_angles.py --config configs/exp01.yaml`
+- Build figures (after running experiments):
+  - `python tools/figures.py --base runs`
+    - Produces PNGs under `runs/figures/` for Exp01–Exp10, including Exp02–Exp06.
 
 ## Status
 

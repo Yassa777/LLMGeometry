@@ -54,11 +54,28 @@ def main():
             continue
         prompts = parent_prompts[pid]
         per_mag = []
+        prompt_mads = {}
         for m in magnitudes:
             out = steer_parent_vector(mdl, tok, prompts, pvec, magnitude=float(m), device=device)
-            mad = torch.mean(torch.abs(out["logit_deltas"]))
+            deltas = out["logit_deltas"].float()  # [B, T, V]
+            # Re-tokenize to get last indices used (matches steer tokenization)
+            tok_batch = tok(prompts, return_tensors="pt", padding=True, truncation=True).to(device)
+            last_idx = tok_batch["attention_mask"].sum(dim=1) - 1  # [B]
+            # Per-prompt mean |Δlogits| at last token
+            per_prompt = []
+            for i in range(deltas.size(0)):
+                li = int(last_idx[i].item())
+                per_prompt.append(float(torch.mean(torch.abs(deltas[i, li, :])).item()))
+            prompt_mads[str(float(m))] = per_prompt
+
+            mad = torch.mean(torch.abs(deltas))
             per_mag.append({"magnitude": float(m), "mean_abs_delta": float(mad.item())})
-        results[pid] = per_mag
+        # Backward-compatible structure: list for old readers, plus rich fields
+        results[pid] = {
+            "per_magnitude": per_mag,
+            "prompt_mads": prompt_mads,
+            "n_prompts": len(prompts),
+        }
 
     with open(out_dir / "interventions.json", "w") as f:
         json.dump({"per_parent": results}, f, indent=2)
@@ -67,4 +84,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

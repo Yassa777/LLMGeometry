@@ -5,6 +5,14 @@ Generate simple figures for geometry-only experiments.
 Produces:
   - fig_angles_hist.png from Exp01 teacher_vectors.json
   - fig_euclid_vs_causal.png from Exp03 euclid_vs_causal.json
+  - fig_ratio_invariance.png from Exp02 ratio_invariance.json
+  - ratio_invariance_per_parent/*.png small multiples per-parent (Exp02)
+  - fig_boundary_normals.png from Exp04 boundary_normals.json
+  - fig_boundary_normals_per_parent.png bar of per-parent medians (Exp04)
+  - fig_interventions.png from Exp05 interventions.json
+  - fig_interventions_scatter.png per-prompt scatter by magnitude (Exp05)
+  - fig_fisher_logit.png from Exp06 fisher_logit_summary.json
+  - fig_fisher_logit_delta.png deltas vs baseline (Exp06)
   - fig_whitening_ablation.png from Exp07 whitening_ablation.json
   - fig_dataset_variants.png from Exp08 dataset_variants.json
   - fig_token_granularity.png from Exp09 token_granularity.json
@@ -61,6 +69,286 @@ def fig_euclid_vs_causal(comp_path: str, out_path: str) -> None:
     plt.tight_layout()
     plt.savefig(out_path, dpi=200)
     plt.close()
+
+def fig_ratio_invariance(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_parent", {})
+    # Collect KLs aggregated by alpha
+    kl_by_alpha = {}
+    for pid, res in per.items():
+        by_alpha = res.get("by_alpha", {})
+        for a_str, vals in by_alpha.items():
+            try:
+                a = float(a_str)
+            except Exception:
+                # keys may already be floats; handle directly
+                a = float(a_str)
+            kl = vals.get("kl_divergence")
+            if kl is None:
+                continue
+            kl_by_alpha.setdefault(a, []).append(float(kl))
+    if not kl_by_alpha:
+        return
+    alphas = sorted(kl_by_alpha.keys())
+    medians = [float(np.median(kl_by_alpha[a])) if kl_by_alpha[a] else np.nan for a in alphas]
+    q25 = [float(np.percentile(kl_by_alpha[a], 25)) if kl_by_alpha[a] else np.nan for a in alphas]
+    q75 = [float(np.percentile(kl_by_alpha[a], 75)) if kl_by_alpha[a] else np.nan for a in alphas]
+    plt.figure(figsize=(5, 3.2))
+    plt.plot(alphas, medians, marker="o", color="#9467bd", label="median KL")
+    # Shaded IQR band
+    plt.fill_between(alphas, q25, q75, color="#9467bd", alpha=0.15, label="IQR")
+    plt.xlabel(r"Intervention magnitude $\alpha$")
+    plt.ylabel("KL(base || intervened)")
+    plt.title("Ratio-invariance across magnitudes")
+    plt.legend(frameon=False)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_boundary_normals(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_parent", {})
+    # Flatten all child angles
+    all_angles = []
+    for pid, child_map in per.items():
+        for cid, ang in child_map.items():
+            try:
+                all_angles.append(float(ang))
+            except Exception:
+                continue
+    if not all_angles:
+        return
+    plt.figure(figsize=(5, 3.2))
+    plt.hist(all_angles, bins=36, density=True, alpha=0.8, color="#2ca02c")
+    plt.axvline(80, linestyle="--", color="gray", linewidth=1)
+    plt.xlabel("Causal angle (degrees)")
+    plt.ylabel("Density")
+    plt.title("Boundary normals vs teacher δ angles")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_interventions(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_parent", {})
+    # Aggregate mean_abs_delta by magnitude; support both legacy list and new dict format
+    vals_by_mag = {}
+    for pid, series in per.items():
+        if isinstance(series, list):
+            it = series
+        elif isinstance(series, dict) and "per_magnitude" in series:
+            it = series["per_magnitude"]
+        else:
+            it = []
+        for item in it:
+            try:
+                m = float(item.get("magnitude", np.nan))
+            except Exception:
+                continue
+            v = item.get("mean_abs_delta")
+            if v is None or np.isnan(m):
+                continue
+            vals_by_mag.setdefault(m, []).append(float(v))
+    if not vals_by_mag:
+        return
+    mags = sorted(vals_by_mag.keys())
+    med = [float(np.median(vals_by_mag[m])) if vals_by_mag[m] else np.nan for m in mags]
+    q25 = [float(np.percentile(vals_by_mag[m], 25)) if vals_by_mag[m] else np.nan for m in mags]
+    q75 = [float(np.percentile(vals_by_mag[m], 75)) if vals_by_mag[m] else np.nan for m in mags]
+    plt.figure(figsize=(5, 3.2))
+    plt.plot(mags, med, marker="o", color="#d62728", label="median |Δlogits|")
+    plt.fill_between(mags, q25, q75, color="#d62728", alpha=0.15, label="IQR")
+    plt.xlabel("Intervention magnitude")
+    plt.ylabel("Mean |Δlogits|")
+    plt.title("Intervention effect vs magnitude")
+    plt.legend(frameon=False)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_fisher_logit(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    labels = ["baseline", "fisher_diag", "logit_var_diag"]
+    med = [data.get(k, {}).get("median", np.nan) for k in labels]
+    frac = [data.get(k, {}).get("fraction_above_80", np.nan) for k in labels]
+    if all(np.isnan(x) for x in med) and all(np.isnan(x) for x in frac):
+        return
+    fig, axs = plt.subplots(1, 2, figsize=(8, 3.2))
+    # Left: median angles
+    axs[0].bar(range(len(labels)), med, color=["#999999", "#1f77b4", "#ff7f0e"])  
+    axs[0].axhline(80, linestyle="--", color="gray", linewidth=1)
+    axs[0].set_xticks(range(len(labels)))
+    axs[0].set_xticklabels(["base", "Fisher", "LogitVar"])
+    axs[0].set_ylabel("Median angle (deg)")
+    axs[0].set_title("Angle medians")
+    # Right: fraction >= 80°
+    axs[1].bar(range(len(labels)), frac, color=["#999999", "#1f77b4", "#ff7f0e"])  
+    axs[1].set_xticks(range(len(labels)))
+    axs[1].set_xticklabels(["base", "Fisher", "LogitVar"])
+    axs[1].set_ylabel("Fraction ≥ 80°")
+    axs[1].set_ylim(0, 1)
+    axs[1].set_title("Orthogonality fraction")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
+
+def fig_ratio_invariance_per_parent(path: str, out_dir: str, max_grid: int = 12) -> None:
+    data = json.load(open(path))
+    per = data.get("per_parent", {})
+    if not per:
+        return
+    # Compute an ordering by median KL across alphas (descending)
+    order = []
+    for pid, res in per.items():
+        by_alpha = res.get("by_alpha", {})
+        kls = [float(v.get("kl_divergence", np.nan)) for v in by_alpha.values()]
+        kls = [x for x in kls if np.isfinite(x)]
+        med = float(np.median(kls)) if kls else np.nan
+        order.append((pid, med))
+    order = [p for p in order if np.isfinite(p[1])]
+    order.sort(key=lambda x: x[1], reverse=True)
+
+    # Grid of top-N
+    top = order[:max_grid]
+    n = len(top)
+    if n == 0:
+        return
+    rows = int(np.ceil(n / 4))
+    cols = min(4, n)
+    fig, axs = plt.subplots(rows, cols, figsize=(4 * cols, 2.8 * rows), squeeze=False)
+    for idx, (pid, _) in enumerate(top):
+        r, c = divmod(idx, cols)
+        ax = axs[r][c]
+        by_alpha = per[pid].get("by_alpha", {})
+        items = sorted([(float(a), float(v.get("kl_divergence", np.nan))) for a, v in by_alpha.items()], key=lambda x: x[0])
+        if items:
+            xs, ys = zip(*items)
+            ax.plot(xs, ys, marker="o", color="#9467bd")
+        ax.set_title(str(pid))
+        ax.set_xlabel(r"$\alpha$")
+        ax.set_ylabel("KL")
+    # Hide unused axes
+    for k in range(n, rows * cols):
+        r, c = divmod(k, cols)
+        fig.delaxes(axs[r][c])
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(str(Path(out_dir) / "fig_ratio_invariance_per_parent.png"), dpi=200)
+    plt.close(fig)
+
+    # Also write individual per-parent plots to folder
+    per_dir = Path(out_dir) / "ratio_invariance_per_parent"
+    per_dir.mkdir(parents=True, exist_ok=True)
+    for pid, _ in order:
+        by_alpha = per[pid].get("by_alpha", {})
+        items = sorted([(float(a), float(v.get("kl_divergence", np.nan))) for a, v in by_alpha.items()], key=lambda x: x[0])
+        if not items:
+            continue
+        xs, ys = zip(*items)
+        plt.figure(figsize=(4, 3.2))
+        plt.plot(xs, ys, marker="o", color="#9467bd")
+        plt.xlabel(r"$\alpha$")
+        plt.ylabel("KL")
+        plt.title(f"Ratio-invariance: {pid}")
+        plt.tight_layout()
+        plt.savefig(str(per_dir / f"{pid}.png"), dpi=200)
+        plt.close()
+
+def fig_boundary_normals_per_parent(path: str, out_path: str, max_bars: int = 40) -> None:
+    data = json.load(open(path))
+    summary = data.get("summary", {})
+    med = summary.get("per_parent_median", {})
+    if not med:
+        return
+    items = [(k, float(v)) for k, v in med.items() if np.isfinite(v)]
+    if not items:
+        return
+    items.sort(key=lambda x: x[1], reverse=True)
+    if max_bars is not None and len(items) > max_bars:
+        items = items[:max_bars]
+    labels = [k for k, _ in items]
+    vals = [v for _, v in items]
+    plt.figure(figsize=(max(6, 0.35 * len(labels)), 3.2))
+    plt.bar(range(len(labels)), vals, color="#2ca02c")
+    plt.axhline(80, linestyle="--", color="gray", linewidth=1)
+    plt.xticks(range(len(labels)), labels, rotation=45, ha="right")
+    plt.ylabel("Median causal angle (deg)")
+    plt.title("Boundary-normal: per-parent medians (top)")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_interventions_scatter(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_parent", {})
+    # Accumulate per-prompt MADs (last-token) across parents if present
+    x, y = [], []
+    for pid, series in per.items():
+        if not isinstance(series, dict) or "prompt_mads" not in series:
+            continue
+        pm = series["prompt_mads"]  # {magnitude(str): [list of floats]}
+        for m_str, arr in pm.items():
+            try:
+                m = float(m_str)
+            except Exception:
+                continue
+            for v in arr:
+                try:
+                    y.append(float(v))
+                    x.append(m)
+                except Exception:
+                    continue
+    if not x:
+        return
+    # Jitter x for visibility
+    rng = np.random.default_rng(0)
+    xj = np.array(x) + rng.normal(scale=0.01, size=len(x))
+    plt.figure(figsize=(5, 3.2))
+    plt.scatter(xj, y, s=10, alpha=0.4, color="#d62728")
+    # Overlay median per magnitude
+    mags = sorted(set(x))
+    med = [float(np.median([yv for xv, yv in zip(x, y) if xv == m])) for m in mags]
+    plt.plot(mags, med, marker="o", color="#1f1f1f", linewidth=1.5, label="median")
+    plt.xlabel("Intervention magnitude")
+    plt.ylabel("Per-prompt mean |Δlogits| (last token)")
+    plt.title("Interventions: per-prompt effect")
+    plt.legend(frameon=False)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_fisher_logit_delta(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    base_m = data.get("baseline", {}).get("median", np.nan)
+    base_f = data.get("baseline", {}).get("fraction_above_80", np.nan)
+    labels = ["Fisher", "LogitVar"]
+    med = [data.get("fisher_diag", {}).get("median", np.nan) - base_m,
+           data.get("logit_var_diag", {}).get("median", np.nan) - base_m]
+    frac = [data.get("fisher_diag", {}).get("fraction_above_80", np.nan) - base_f,
+            data.get("logit_var_diag", {}).get("fraction_above_80", np.nan) - base_f]
+    fig, axs = plt.subplots(1, 2, figsize=(8, 3.2))
+    axs[0].bar(range(len(labels)), med, color=["#1f77b4", "#ff7f0e"])  
+    axs[0].axhline(0, linestyle="--", color="gray", linewidth=1)
+    axs[0].set_xticks(range(len(labels)))
+    axs[0].set_xticklabels(labels)
+    axs[0].set_ylabel("Δ median angle (deg)")
+    axs[0].set_title("Delta from baseline")
+    axs[1].bar(range(len(labels)), frac, color=["#1f77b4", "#ff7f0e"])  
+    axs[1].axhline(0, linestyle="--", color="gray", linewidth=1)
+    axs[1].set_xticks(range(len(labels)))
+    axs[1].set_xticklabels(labels)
+    axs[1].set_ylabel("Δ fraction ≥ 80°")
+    axs[1].set_title("Delta from baseline")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
 
 
 def fig_whitening_ablation(path: str, out_path: str) -> None:
@@ -153,6 +441,34 @@ def main():
     if comp.exists():
         fig_euclid_vs_causal(str(comp), str(base / "figures" / "fig_euclid_vs_causal.png"))
         print("Wrote:", base / "figures" / "fig_euclid_vs_causal.png")
+
+    rinv = base / "exp02" / "ratio_invariance.json"
+    if rinv.exists():
+        fig_ratio_invariance(str(rinv), str(base / "figures" / "fig_ratio_invariance.png"))
+        print("Wrote:", base / "figures" / "fig_ratio_invariance.png")
+        fig_ratio_invariance_per_parent(str(rinv), str(base / "figures"))
+        print("Wrote:", base / "figures" / "fig_ratio_invariance_per_parent.png")
+
+    bnorm = base / "exp04" / "boundary_normals.json"
+    if bnorm.exists():
+        fig_boundary_normals(str(bnorm), str(base / "figures" / "fig_boundary_normals.png"))
+        print("Wrote:", base / "figures" / "fig_boundary_normals.png")
+        fig_boundary_normals_per_parent(str(bnorm), str(base / "figures" / "fig_boundary_normals_per_parent.png"))
+        print("Wrote:", base / "figures" / "fig_boundary_normals_per_parent.png")
+
+    interv = base / "exp05" / "interventions.json"
+    if interv.exists():
+        fig_interventions(str(interv), str(base / "figures" / "fig_interventions.png"))
+        print("Wrote:", base / "figures" / "fig_interventions.png")
+        fig_interventions_scatter(str(interv), str(base / "figures" / "fig_interventions_scatter.png"))
+        print("Wrote:", base / "figures" / "fig_interventions_scatter.png")
+
+    fls = base / "exp06" / "fisher_logit_summary.json"
+    if fls.exists():
+        fig_fisher_logit(str(fls), str(base / "figures" / "fig_fisher_logit.png"))
+        print("Wrote:", base / "figures" / "fig_fisher_logit.png")
+        fig_fisher_logit_delta(str(fls), str(base / "figures" / "fig_fisher_logit_delta.png"))
+        print("Wrote:", base / "figures" / "fig_fisher_logit_delta.png")
 
     wabl = base / "exp07" / "whitening_ablation.json"
     if wabl.exists():
