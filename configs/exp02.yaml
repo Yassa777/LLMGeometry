@@ -4,4 +4,4 @@ inputs:
 logging:
   save_dir: runs/exp02
 eval:
-  alphas: [0.5, 1.0, 2.0]
+  alphas: [-1.0, -0.5, 0.5, 1.0]

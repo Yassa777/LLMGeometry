@@ -108,3 +108,27 @@ def ratio_invariance_synthetic(
         "n_tests": len(kls),
     }
     return {"by_alpha": by_alpha, "aggregate": agg}
+
+
+def sibling_ratio_kl_from_logits(
+    logits_before: torch.Tensor,
+    logits_after: torch.Tensor,
+    sibling_token_ids: List[int],
+) -> float:
+    """KL divergence between sibling token distributions before/after an edit.
+
+    Uses last-token logits, restricts to the sibling token id set, computes
+    average probability across prompts (mean over batch), and returns KL(base||after).
+    """
+    if logits_before.ndim != 3 or logits_after.ndim != 3:
+        raise ValueError("Expected logits of shape [B, T, V]")
+    if logits_before.shape != logits_after.shape:
+        raise ValueError("Mismatched logits_before/logits_after shapes")
+    if not sibling_token_ids:
+        return float("nan")
+    lb = logits_before[:, -1, sibling_token_ids].to(torch.float32)
+    la = logits_after[:, -1, sibling_token_ids].to(torch.float32)
+    pb = torch.softmax(lb, dim=-1).mean(dim=0)
+    pa = torch.softmax(la, dim=-1).mean(dim=0)
+    kl = torch.sum(pb * (torch.log(pb + 1e-8) - torch.log(pa + 1e-8)))
+    return float(kl.item())

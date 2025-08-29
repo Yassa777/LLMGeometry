@@ -100,7 +100,7 @@ def main():
         # If W = diag(inv_sqrt(var)), then Sigma ≈ diag(var)
         var = torch.diag(Wdiag).pow(-2)
         geom.Sigma = torch.diag(var)
-        # angles between a few parent/deltas (fallback to causal norms of deltas)
+        # angles between a few parent/deltas
         angs = []
         count = 0
         for pid, deltas in child_deltas.items():
@@ -120,8 +120,21 @@ def main():
         a = np.array(angs)
         return {"median": float(np.median(a)), "fraction_above_80": float(np.mean(a >= 80))}
 
+    def angle_summary_from_geom(geom_in: CausalGeometry):
+        angs = []
+        for pid, deltas in child_deltas.items():
+            p = parents.get(pid)
+            if p is None:
+                continue
+            for delt in deltas.values():
+                angs.append(float(torch.rad2deg(geom_in.causal_angle(p, delt)).item()))
+        if not angs:
+            return {"median": float("nan"), "fraction_above_80": 0.0}
+        a = np.array(angs)
+        return {"median": float(np.median(a)), "fraction_above_80": float(np.mean(a >= 80))}
+
     summary = {
-        "baseline": angle_summary(base_geom.W.cpu()),
+        "baseline": angle_summary_from_geom(base_geom),
         "fisher_diag": angle_summary(W_f),
         "logit_var_diag": angle_summary(W_l),
     }

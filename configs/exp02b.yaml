@@ -1,0 +1,14 @@
+run:
+  device: cpu
+model:
+  name: distilgpt2
+inputs:
+  geometry: runs/exp01/geometry.pt
+  teacher_vectors: runs/exp01/teacher_vectors.json
+  hierarchies_json: runs/exp01/concept_hierarchies.json
+logging:
+  save_dir: runs/exp02b
+data:
+  prompts_per_parent: 8
+eval:
+  alphas: [-1.0, -0.5, 0.0, 0.5, 1.0]

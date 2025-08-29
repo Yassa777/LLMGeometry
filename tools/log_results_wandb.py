@@ -45,7 +45,8 @@ def main():
         wandb.log({
             "exp01/angle_median_deg": ang.get("median_angle_deg"),
             "exp01/fraction_above_80": ang.get("fraction_above_threshold"),
-            "exp01/whitening_violation_MAE": geom.get("W_Sigma_Wt_minus_I_MAE"),
+            "exp01/whiten_offdiag_rms": geom.get("whiten_offdiag_rms"),
+            "exp01/whiten_fro_error": geom.get("whiten_fro_error"),
         })
         wandb.save(str(base / "exp01" / "teacher_vectors.json"))
 

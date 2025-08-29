@@ -174,6 +174,28 @@ def main():
             }
         )
 
+    # Add sibling token sets and simple contrast pairs (token strings)
+    for item in data:
+        # Sibling tokens: use child names + simple pluralization
+        sib_tokens: Dict[str, List[str]] = {}
+        for c in item["children"]:
+            nm = c["name"]
+            toks = [nm]
+            if not nm.endswith("s"):
+                toks.append(nm + "s")
+            sib_tokens[c["synset_id"]] = toks
+        item["sibling_tokens"] = sib_tokens
+        # Parent/child contrast pairs
+        parent_nm = item["parent"]["name"]
+        parent_pairs = [[parent_nm, parent_nm + "s"]]
+        # Child pairs: pair consecutive children
+        ch = item["children"]
+        child_pairs = []
+        for i in range(0, len(ch) - 1, 2):
+            child_pairs.append([ch[i]["synset_id"], ch[i + 1]["synset_id"]])
+        item["parent_pairs"] = parent_pairs
+        item["child_pairs"] = child_pairs
+
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w") as f:
@@ -183,4 +205,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

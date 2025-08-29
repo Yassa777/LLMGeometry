@@ -47,8 +47,8 @@ class LDAEstimator:
             w_w = torch.linalg.pinv(Sw) @ (mu_p - mu_n)
         # Map back to original space using W^{-T}
         # whiten(x) = x W^T ⇒ direction_original = w_w @ (W^T)^{-1}
-        Wt_inv = torch.linalg.inv(geometry.W.to(torch.float32).t())
-        direction_orig = (w_w @ Wt_inv).to(torch.float32)
+        # Solve W x = w_w  (since whiten(x) = x W^T ⇒ w_w is in whitened coords)
+        direction_orig = torch.linalg.solve(geometry.W.to(torch.float32), w_w)
         if normalize:
             direction_orig = geometry.normalize_causal(direction_orig)
         return direction_orig
@@ -139,8 +139,7 @@ class MeanDiffEstimator:
         mu_n = Xn.mean(dim=0)
         w_w = (mu_p - mu_n)
         # Map back to original space using W^{-T}
-        Wt_inv = torch.linalg.inv(geometry.W.to(torch.float32).t())
-        direction_orig = (w_w @ Wt_inv).to(torch.float32)
+        direction_orig = torch.linalg.solve(geometry.W.to(torch.float32), w_w)
         if normalize:
             direction_orig = geometry.normalize_causal(direction_orig)
         return direction_orig
@@ -169,8 +168,7 @@ class L2ProbeEstimator:
         clf = LogisticRegression(max_iter=self.max_iter, C=self.C, solver="lbfgs")
         clf.fit(X, y)
         w_w = torch.tensor(clf.coef_[0], dtype=torch.float32)
-        Wt_inv = torch.linalg.inv(geometry.W.to(torch.float32).t())
-        direction_orig = (w_w @ Wt_inv).to(torch.float32)
+        direction_orig = torch.linalg.solve(geometry.W.to(torch.float32), w_w)
         if normalize:
             direction_orig = geometry.normalize_causal(direction_orig)
         return direction_orig

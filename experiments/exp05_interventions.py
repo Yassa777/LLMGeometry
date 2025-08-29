@@ -56,6 +56,7 @@ def main():
         prompts = parent_prompts[pid]
         per_mag = []
         prompt_mads = {}
+        locality = {"parent_ddelta": {}, "child_ddelta_abs": {}}
         for m in magnitudes:
             out = steer_parent_vector(mdl, tok, prompts, pvec, magnitude=float(m), device=device)
             deltas = out["logit_deltas"].float()  # [B, T, V]
@@ -71,11 +72,53 @@ def main():
 
             mad = torch.mean(torch.abs(deltas))
             per_mag.append({"magnitude": float(m), "mean_abs_delta": float(mad.item())})
+            # ΔΔ locality using hierarchy token pairs if available
+            # parent_pairs: [[tokA, tokB]] in hierarchy JSON
+            # child_pairs: [[child_id1, child_id2]] mapping to tokenization of names
+            # Use simple tokenizer on string tokens
+            # Load hierarchy for this parent
+            # Note: load_hierarchies returns dataclasses; to avoid complexity, parse raw JSON too
+        try:
+            import json as _json
+            hraw = _json.load(open(cfg["inputs"]["hierarchies"]))
+            hh = next((h for h in hraw if h["parent"]["synset_id"] == pid), None)
+            if hh:
+                # Build token pairs
+                def tok_id(s):
+                    ids = tok(s, add_special_tokens=False).input_ids
+                    return ids[0] if ids else None
+                for m in magnitudes:
+                    out = steer_parent_vector(mdl, tok, prompts, pvec, magnitude=float(m), device=device)
+                    logits0 = out["baseline_logits"].float()
+                    logits1 = out["steered_logits"].float()
+                    # Parent pairs ΔΔ
+                    for a, b in hh.get("parent_pairs", []):
+                        ia, ib = tok_id(a), tok_id(b)
+                        if ia is None or ib is None:
+                            continue
+                        da = (logits1[:, -1, ia] - logits0[:, -1, ia]).mean()
+                        db = (logits1[:, -1, ib] - logits0[:, -1, ib]).mean()
+                        ddelta = float((da - db).item())
+                        locality["parent_ddelta"].setdefault(str(float(m)), []).append(ddelta)
+                    # Child pairs |ΔΔ|
+                    for c1, c2 in hh.get("child_pairs", []):
+                        n1 = hh.get("child_prompts", {}).get(c1, [c1.split(".")[0]])[0]
+                        n2 = hh.get("child_prompts", {}).get(c2, [c2.split(".")[0]])[0]
+                        i1, i2 = tok_id(n1), tok_id(n2)
+                        if i1 is None or i2 is None:
+                            continue
+                        d1 = (logits1[:, -1, i1] - logits0[:, -1, i1]).mean()
+                        d2 = (logits1[:, -1, i2] - logits0[:, -1, i2]).mean()
+                        ddelta = float(torch.abs(d1 - d2).item())
+                        locality["child_ddelta_abs"].setdefault(str(float(m)), []).append(ddelta)
+        except Exception:
+            pass
         # Backward-compatible structure: list for old readers, plus rich fields
         results[pid] = {
             "per_magnitude": per_mag,
             "prompt_mads": prompt_mads,
             "n_prompts": len(prompts),
+            "locality": locality,
         }
 
     with open(out_dir / "interventions.json", "w") as f:

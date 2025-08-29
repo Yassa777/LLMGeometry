@@ -11,6 +11,7 @@ Produces:
   - fig_boundary_normals_per_parent.png bar of per-parent medians (Exp04)
   - fig_interventions.png from Exp05 interventions.json
   - fig_interventions_scatter.png per-prompt scatter by magnitude (Exp05)
+  - fig_edit_locality.png parent ΔΔ vs child |ΔΔ| bars (Exp05)
   - fig_fisher_logit.png from Exp06 fisher_logit_summary.json
   - fig_fisher_logit_delta.png deltas vs baseline (Exp06)
   - fig_whitening_ablation.png from Exp07 whitening_ablation.json
@@ -173,6 +174,38 @@ def fig_interventions(path: str, out_path: str) -> None:
     plt.xlabel("Intervention magnitude")
     plt.ylabel("Mean |Δlogits|")
     plt.title("Intervention effect vs magnitude")
+    plt.legend(frameon=False)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_edit_locality(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_parent", {})
+    mags = set()
+    pvals, cvals = {}, {}
+    for pid, v in per.items():
+        loc = v.get("locality", {})
+        for m, arr in loc.get("parent_ddelta", {}).items():
+            mags.add(float(m))
+            pvals.setdefault(float(m), []).extend([float(x) for x in arr])
+        for m, arr in loc.get("child_ddelta_abs", {}).items():
+            mags.add(float(m))
+            cvals.setdefault(float(m), []).extend([float(x) for x in arr])
+    if not mags:
+        return
+    ms = sorted(mags)
+    pmed = [float(np.nanmedian(pvals.get(m, []))) if pvals.get(m) else np.nan for m in ms]
+    cmed = [float(np.nanmedian(cvals.get(m, []))) if cvals.get(m) else np.nan for m in ms]
+    plt.figure(figsize=(6, 3.2))
+    width = 0.35
+    xs = np.arange(len(ms))
+    plt.bar(xs - width/2, pmed, width=width, label="parent ΔΔ", color="#1f77b4")
+    plt.bar(xs + width/2, cmed, width=width, label="child |ΔΔ|", color="#ff7f0e")
+    plt.xticks(xs, [str(m) for m in ms])
+    plt.ylabel("Median ΔΔ (logits)")
+    plt.title("Edit locality")
     plt.legend(frameon=False)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     plt.tight_layout()
@@ -625,6 +658,8 @@ def main():
         print("Wrote:", base / "figures" / "fig_interventions.png")
         fig_interventions_scatter(str(interv), str(base / "figures" / "fig_interventions_scatter.png"))
         print("Wrote:", base / "figures" / "fig_interventions_scatter.png")
+        fig_edit_locality(str(interv), str(base / "figures" / "fig_edit_locality.png"))
+        print("Wrote:", base / "figures" / "fig_edit_locality.png")
 
     fls = base / "exp06" / "fisher_logit_summary.json"
     if fls.exists():
