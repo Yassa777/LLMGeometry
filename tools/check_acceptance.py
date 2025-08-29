@@ -100,10 +100,18 @@ def main():
         pvals, cvals = [], []
         for v in per.values():
             loc = v.get("locality", {})
-            for arr in loc.get("parent_ddelta", {}).values():
-                pvals.extend(arr)
-            for arr in loc.get("child_ddelta_abs", {}).values():
-                cvals.extend(arr)
+            for a, arr in loc.get("parent_ddelta", {}).items():
+                try:
+                    if float(a) > 0:
+                        pvals.extend(arr)
+                except Exception:
+                    continue
+            for a, arr in loc.get("child_ddelta_abs", {}).items():
+                try:
+                    if float(a) > 0:
+                        cvals.extend(arr)
+                except Exception:
+                    continue
         import numpy as np
         pm = float(np.median(pvals)) if pvals else float("nan")
         cm = float(np.median(cvals)) if cvals else float("nan")
@@ -143,4 +151,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

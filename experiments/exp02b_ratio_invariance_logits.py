@@ -83,14 +83,17 @@ def main():
         pid = h["parent"]["synset_id"]
         parent_prompts[pid] = h.get("parent_prompts", [])[: int(cfg.get("data", {}).get("prompts_per_parent", 8))]
         sib = {}
-        for cid, names in h.get("child_prompts", {}).items():
-            # use each child's first prompt keyword as name fallback to child synset lemma
-            nm = h.get("children", [{}])[0].get("name", cid.split(".")[0])
-            # but better: derive from synset name if present in children list
-        for c in h.get("children", []):
-            cid = c.get("synset_id")
-            nm = c.get("name", cid.split(".")[0])
-            sib[cid] = child_token_ids_from_names(tok, [nm])
+        # Prefer provided sibling_tokens if present (aliases)
+        provided = h.get("sibling_tokens", {})
+        if provided:
+            for cid, alias_list in provided.items():
+                sib[cid] = child_token_ids_from_names(tok, alias_list)
+        else:
+            # Fallback to child names
+            for c in h.get("children", []):
+                cid = c.get("synset_id")
+                nm = c.get("name", cid.split(".")[0])
+                sib[cid] = child_token_ids_from_names(tok, [nm])
         sibling_ids[pid] = sib
 
     alphas = cfg.get("eval", {}).get("alphas", [-1.0, -0.5, 0.0, 0.5, 1.0])
@@ -203,4 +206,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

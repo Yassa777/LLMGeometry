@@ -174,16 +174,43 @@ def main():
             }
         )
 
-    # Add sibling token sets and simple contrast pairs (token strings)
+    # Add sibling token sets (aliases from WordNet lemmas + simple plurals) and contrast pairs
     for item in data:
-        # Sibling tokens: use child names + simple pluralization
+        # Sibling tokens: alias set per child
         sib_tokens: Dict[str, List[str]] = {}
         for c in item["children"]:
             nm = c["name"]
-            toks = [nm]
-            if not nm.endswith("s"):
-                toks.append(nm + "s")
-            sib_tokens[c["synset_id"]] = toks
+            cid = c["synset_id"]
+            aliases: List[str] = []
+            # Include WordNet lemma names for the synset
+            try:
+                ensure_wordnet()
+                ss = wn.synset(cid)
+                for l in ss.lemmas():
+                    name = l.name().replace("_", " ")
+                    # keep simple words/phrases
+                    if name and name.lower() not in {a.lower() for a in aliases}:
+                        aliases.append(name)
+            except Exception:
+                pass
+            # Always include the provided child name
+            if nm.lower() not in {a.lower() for a in aliases}:
+                aliases.append(nm)
+            # Add simple plural forms
+            extras = []
+            for a in aliases:
+                if not a.endswith("s"):
+                    extras.append(a + "s")
+            aliases.extend(extras)
+            # Deduplicate and cap length
+            dedup: List[str] = []
+            seen = set()
+            for a in aliases:
+                key = a.lower()
+                if key not in seen:
+                    seen.add(key)
+                    dedup.append(a)
+            sib_tokens[cid] = dedup[:8]  # cap to 8 aliases per child
         item["sibling_tokens"] = sib_tokens
         # Parent/child contrast pairs
         parent_nm = item["parent"]["name"]
