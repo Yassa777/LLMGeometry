@@ -1,0 +1,11 @@
+run:
+  device: cpu
+model:
+  name: distilgpt2
+inputs:
+  teacher_vectors: runs/exp01/teacher_vectors.json
+  hierarchies: runs/exp01/concept_hierarchies.json
+logging:
+  save_dir: runs/exp05
+eval:
+  magnitudes: [0.5, 1.0, 2.0]

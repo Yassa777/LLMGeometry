@@ -1,0 +1,8 @@
+inputs:
+  geometry: runs/exp01/geometry.pt
+  teacher_vectors: runs/exp01/teacher_vectors.json
+  activations: runs/exp01/activations.h5
+logging:
+  save_dir: runs/exp04
+geometry:
+  subspace_dim: 32
