@@ -12,17 +12,22 @@ set -euo pipefail
 #     [--hier /path/to/hierarchy.json] \
 #     [--max-pos 8 --max-neg 8 --n-prompts 64]
 
-MODEL="distilgpt2"
+MODEL="EleutherAI/pythia-410m-deduped"
 DEVICE="cuda:0"
 HF_TOKEN=""
 WANDB_KEY=""
 WANDB_PROJECT=""
 WANDB_RUN_NAME="llmgeom_all"
 HIER_JSON=""
+HIER_SOURCE="default" # default|wordnet
 MAX_POS=8
 MAX_NEG=8
 N_PROMPTS=64
-BUILD_POOLED=0
+BUILD_POOLED=1
+WN_PARENTS="animal.n.01,vehicle.n.01,profession.n.01,food.n.01,emotion.n.01,programming_language.n.01,geographical_area.n.01,art.n.01"
+WN_CHILDREN=6
+WN_PROMPTS=24
+WN_MIN_ZIPF=3.0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,10 +38,16 @@ while [[ $# -gt 0 ]]; do
     --project) WANDB_PROJECT="$2"; shift 2;;
     --run-name) WANDB_RUN_NAME="$2"; shift 2;;
     --hier) HIER_JSON="$2"; shift 2;;
+    --hier-source) HIER_SOURCE="$2"; shift 2;;
     --max-pos) MAX_POS="$2"; shift 2;;
     --max-neg) MAX_NEG="$2"; shift 2;;
     --n-prompts) N_PROMPTS="$2"; shift 2;;
     --build-pooled) BUILD_POOLED=1; shift 1;;
+    --no-build-pooled) BUILD_POOLED=0; shift 1;;
+    --wn-parents) WN_PARENTS="$2"; shift 2;;
+    --wn-children) WN_CHILDREN="$2"; shift 2;;
+    --wn-prompts) WN_PROMPTS="$2"; shift 2;;
+    --wn-min-zipf) WN_MIN_ZIPF="$2"; shift 2;;
     *) echo "Unknown arg: $1"; exit 1;;
   esac
 done
@@ -62,8 +73,16 @@ echo "[2/8] Preparing hierarchy JSON..."
 if [[ -n "$HIER_JSON" ]]; then
   mkdir -p runs/exp01
   cp -f "$HIER_JSON" runs/exp01/concept_hierarchies.json
+elif [[ "$HIER_SOURCE" == "wordnet" ]]; then
+  echo "Building WordNet-backed hierarchy..."
+  PYTHONPATH=. python tools/build_wordnet_hierarchy.py \
+    --out runs/exp01/concept_hierarchies.json \
+    --parents "$WN_PARENTS" \
+    --children-per-parent "$WN_CHILDREN" \
+    --prompts-per-concept "$WN_PROMPTS" \
+    --min-zipf "$WN_MIN_ZIPF"
 else
-  PYTHONPATH=. python tools/build_toy_hierarchy.py --out runs/exp01/concept_hierarchies.json
+  PYTHONPATH=. python tools/build_default_hierarchy.py --out runs/exp01/concept_hierarchies.json
 fi
 
 echo "[3/8] Building hierarchical activations on $DEVICE..."

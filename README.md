@@ -49,6 +49,17 @@ HF models and a simple Phase-1-style pipeline.
     - `python tools/build_activations.py --model distilgpt2 --hier runs/exp01/concept_hierarchies.json --out runs/exp01/activations.h5 --device cpu`
   - The script populates per-concept positive/negative activations (heuristic negatives from siblings/others).
 
+### Building Hierarchies
+
+- Curated default (multi-domain):
+  - `python tools/build_default_hierarchy.py --out runs/exp01/concept_hierarchies.json`
+- WordNet-backed (recommended for scale):
+  - `python tools/build_wordnet_hierarchy.py --out runs/exp01/concept_hierarchies.json \
+       --children-per-parent 6 --prompts-per-concept 24 --min-zipf 3.0`
+  - Customize parents via `--parents animal.n.01,vehicle.n.01,...`.
+  - In the end-to-end script, use: `--hier-source wordnet` and optional
+    `--wn-children/--wn-prompts/--wn-min-zipf/--wn-parents`.
+
 ## Experiments Overview
 
 - Exp01: Teacher vectors & causal angles

@@ -8,3 +8,5 @@ tqdm
 pyyaml
 matplotlib
 wandb
+nltk
+wordfreq
