@@ -81,6 +81,22 @@ def main():
         tok = AutoTokenizer.from_pretrained(model_name)
         if tok.pad_token is None:
             tok.pad_token = tok.eos_token
+    # Check geometry vs model hidden size for offtarget edits
+    geom_dim = int(geom.W.shape[0])
+    hidden_size = None
+    try:
+        if mdl is not None:
+            hidden_size = getattr(mdl.config, "hidden_size", None) or getattr(mdl.config, "n_embd", None)
+            if hidden_size is not None:
+                hidden_size = int(hidden_size)
+    except Exception:
+        hidden_size = None
+    enable_offtarget = bool(hier and mdl and tok and hidden_size is not None and hidden_size == geom_dim)
+    if not enable_offtarget:
+        try:
+            print(f"[Exp05b] Skipping off-target ΔΔ: geom_dim={geom_dim} hidden_size={hidden_size}")
+        except Exception:
+            pass
 
     # Build child->parent and unrelated token sets (union of tokens from other parents)
     child_to_parent: Dict[str, str] = {}
@@ -151,12 +167,15 @@ def main():
                 "angle_to_teacher_l2probe": float(torch.rad2deg(geom.causal_angle(w_l2, t)).item()),
             })
         # Off-target ΔΔ using unrelated contrasts
-        if hier and mdl and tok:
+        if enable_offtarget:
             pid = child_to_parent.get(cid)
             if pid and parent_prompts.get(pid) and other_parent_tokens.get(pid):
                 prompts = parent_prompts[pid]
                 tokens = other_parent_tokens[pid]
                 def offtarget(w):
+                    # extra guard per-vector
+                    if w.shape[-1] != geom_dim:
+                        return []
                     out = steer_parent_vector(mdl, tok, prompts, w, magnitude=float(cfg.get("eval", {}).get("magnitude", 0.5)), device=device)
                     logits0 = out["baseline_logits"].float()
                     logits1 = out["steered_logits"].float()
