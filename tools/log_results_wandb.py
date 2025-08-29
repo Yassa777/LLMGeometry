@@ -177,15 +177,32 @@ def main():
         k = em.get("kl_vs_layer", {})
         kq25 = em.get("kl_vs_layer_q25", {})
         kq75 = em.get("kl_vs_layer_q75", {})
-        for layer in sorted(set(list(a.keys()) + list(k.keys()))):
+        layers = sorted(set([int(x) for x in list(a.keys()) + list(k.keys())]))
+        for layer in layers:
             wandb.log({
-                f"exp10b/angle/median/L{layer}": a.get(layer),
-                f"exp10b/angle/q25/L{layer}": aq25.get(layer),
-                f"exp10b/angle/q75/L{layer}": aq75.get(layer),
-                f"exp10b/kl/median/L{layer}": k.get(layer),
-                f"exp10b/kl/q25/L{layer}": kq25.get(layer),
-                f"exp10b/kl/q75/L{layer}": kq75.get(layer),
+                f"exp10b/angle/median/L{layer}": a.get(str(layer)),
+                f"exp10b/angle/q25/L{layer}": aq25.get(str(layer)),
+                f"exp10b/angle/q75/L{layer}": aq75.get(str(layer)),
+                f"exp10b/kl/median/L{layer}": k.get(str(layer)),
+                f"exp10b/kl/q25/L{layer}": kq25.get(str(layer)),
+                f"exp10b/kl/q75/L{layer}": kq75.get(str(layer)),
             })
+        # Compact table with all per-layer stats
+        n_a = em.get("n_angle_per_layer", {})
+        n_k = em.get("n_kl_per_layer", {})
+        table = wandb.Table(columns=[
+            "layer", "angle_median", "angle_q25", "angle_q75",
+            "kl_median", "kl_q25", "kl_q75", "n_angle", "n_kl"
+        ])
+        for layer in layers:
+            row = [
+                int(layer),
+                a.get(str(layer)), aq25.get(str(layer)), aq75.get(str(layer)),
+                k.get(str(layer)), kq25.get(str(layer)), kq75.get(str(layer)),
+                n_a.get(str(layer)), n_k.get(str(layer)),
+            ]
+            table.add_data(*row)
+        wandb.log({"exp10b/emergence_table": table})
         wandb.save(str(base / "exp10b" / "emergence_curves.json"))
 
     # Figures
