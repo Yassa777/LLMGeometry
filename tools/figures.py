@@ -5,6 +5,10 @@ Generate simple figures for geometry-only experiments.
 Produces:
   - fig_angles_hist.png from Exp01 teacher_vectors.json
   - fig_euclid_vs_causal.png from Exp03 euclid_vs_causal.json
+  - fig_whitening_ablation.png from Exp07 whitening_ablation.json
+  - fig_dataset_variants.png from Exp08 dataset_variants.json
+  - fig_token_granularity.png from Exp09 token_granularity.json
+  - fig_layer_variants.png from Exp10 layer_variants.json
 """
 
 from __future__ import annotations
@@ -59,6 +63,81 @@ def fig_euclid_vs_causal(comp_path: str, out_path: str) -> None:
     plt.close()
 
 
+def fig_whitening_ablation(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    res = data.get("results", {})
+    xs, ys = [], []
+    for k, v in res.items():
+        try:
+            xs.append(float(k))
+            ys.append(float(v.get("angle_median_deg", np.nan)))
+        except Exception:
+            continue
+    if not xs:
+        return
+    idx = np.argsort(xs)
+    xs = np.array(xs)[idx]
+    ys = np.array(ys)[idx]
+    plt.figure(figsize=(5, 3.2))
+    plt.plot(xs, ys, marker="o", color="#1f77b4")
+    plt.xlabel("Shrinkage")
+    plt.ylabel("Median causal angle (deg)")
+    plt.title("Whitening ablation: angle vs shrinkage")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+
+def fig_dataset_variants(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_variant", {})
+    labels = list(per.keys())
+    vals = [per[k].get("angle_median_deg", np.nan) for k in labels]
+    if not labels:
+        return
+    plt.figure(figsize=(max(5, 0.6 * len(labels)), 3.2))
+    plt.bar(range(len(labels)), vals, color="#1f77b4")
+    plt.xticks(range(len(labels)), [Path(k).name for k in labels], rotation=45, ha="right")
+    plt.ylabel("Median causal angle (deg)")
+    plt.title("Dataset variants: angle medians")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+
+def fig_token_granularity(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    last_m = data.get("last_token", {}).get("angle_median_deg", np.nan)
+    pool_m = data.get("pooled", {}).get("angle_median_deg", np.nan)
+    plt.figure(figsize=(4, 3.2))
+    plt.bar(["last", "pooled"], [last_m, pool_m], color=["#1f77b4", "#ff7f0e"]) 
+    plt.ylabel("Median causal angle (deg)")
+    plt.title("Token granularity")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+
+def fig_layer_variants(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    layers = data.get("layers", {})
+    xs = sorted(int(k) for k in layers.keys())
+    ys = [layers[str(k)].get("angle_median_deg", np.nan) for k in xs]
+    if not xs:
+        return
+    plt.figure(figsize=(5, 3.2))
+    plt.plot(xs, ys, marker="o", color="#2ca02c")
+    plt.xlabel("Layer index")
+    plt.ylabel("Median causal angle (deg)")
+    plt.title("Layer variants: angle median vs layer")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
 def main():
     ap = argparse.ArgumentParser(description="Build geometry figures")
     ap.add_argument("--base", type=str, default="runs")
@@ -75,7 +154,26 @@ def main():
         fig_euclid_vs_causal(str(comp), str(base / "figures" / "fig_euclid_vs_causal.png"))
         print("Wrote:", base / "figures" / "fig_euclid_vs_causal.png")
 
+    wabl = base / "exp07" / "whitening_ablation.json"
+    if wabl.exists():
+        fig_whitening_ablation(str(wabl), str(base / "figures" / "fig_whitening_ablation.png"))
+        print("Wrote:", base / "figures" / "fig_whitening_ablation.png")
+
+    dsv = base / "exp08" / "dataset_variants.json"
+    if dsv.exists():
+        fig_dataset_variants(str(dsv), str(base / "figures" / "fig_dataset_variants.png"))
+        print("Wrote:", base / "figures" / "fig_dataset_variants.png")
+
+    tkg = base / "exp09" / "token_granularity.json"
+    if tkg.exists():
+        fig_token_granularity(str(tkg), str(base / "figures" / "fig_token_granularity.png"))
+        print("Wrote:", base / "figures" / "fig_token_granularity.png")
+
+    lvar = base / "exp10" / "layer_variants.json"
+    if lvar.exists():
+        fig_layer_variants(str(lvar), str(base / "figures" / "fig_layer_variants.png"))
+        print("Wrote:", base / "figures" / "fig_layer_variants.png")
+
 
 if __name__ == "__main__":
     main()
-
