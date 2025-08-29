@@ -1,6 +1,7 @@
+from .geometry import CausalGeometry
+
 __all__ = [
-    # modules will be added in subsequent commits
+    "CausalGeometry",
 ]
 
 __version__ = "0.1.0"
-
