@@ -25,8 +25,9 @@ import yaml
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from llmgeometry import CausalGeometry
+from llmgeometry.estimators import LDAEstimator
 from llmgeometry.geometry import geometry_from_shuffled_unembedding
-from llmgeometry.loaders import load_geometry, load_teacher_vectors
+from llmgeometry.loaders import load_geometry, load_teacher_vectors, load_activations
 from llmgeometry.validation import sibling_ratio_kl_from_logits
 
 
@@ -108,6 +109,37 @@ def main():
 
     pids = [pid for pid in parents.keys() if pid in parent_prompts]
     results: Dict[str, Dict] = {}
+    # Optional Euclidean (identity-geometry) parent directions from activations
+    euclid_dirs: Dict[str, torch.Tensor] = {}
+    acts = None
+    try:
+        if "activations" in cfg.get("inputs", {}):
+            acts = load_activations(cfg["inputs"]["activations"])  # {concept_id: {pos,neg}}
+    except Exception:
+        acts = None
+
+    # Find hidden size d from a single forward
+    d_hidden = None
+    try:
+        with torch.no_grad():
+            _tmp_inputs = tok(["test"], return_tensors="pt").to(device)
+            _out = mdl(**_tmp_inputs, output_hidden_states=True)
+            d_hidden = int(_out.hidden_states[-1].shape[-1])
+    except Exception:
+        pass
+
+    if acts is not None and d_hidden is not None:
+        id_geom = CausalGeometry(torch.eye(d_hidden), shrinkage=0.0)
+        lda_id = LDAEstimator(shrinkage=0.0)
+        for pid in pids:
+            a = acts.get(pid)
+            if a and "pos" in a and "neg" in a and len(a["pos"]) and len(a["neg"]):
+                try:
+                    w = lda_id.estimate_binary_direction(a["pos"], a["neg"], id_geom, normalize=True)
+                    euclid_dirs[pid] = w.to(torch.float32)
+                except Exception:
+                    continue
+
     for pid in pids:
         prompts = parent_prompts[pid]
         sib = sibling_ids.get(pid, {})
@@ -130,7 +162,11 @@ def main():
                 if cond == "causal":
                     v = geom.normalize_causal(pvec)
                 elif cond == "euclid":
-                    v = pvec / (pvec.norm() + 1e-8)
+                    # Prefer Euclidean LDA direction under identity geometry if available
+                    if pid in euclid_dirs:
+                        v = euclid_dirs[pid] / (euclid_dirs[pid].norm() + 1e-8)
+                    else:
+                        v = pvec / (pvec.norm() + 1e-8)
                 elif cond == "random_parent":
                     v = geom.normalize_causal(rp_vec)
                 elif cond == "shuffled_U" and geom_shuf is not None:

@@ -6,6 +6,7 @@ inputs:
   geometry: runs/exp01/geometry.pt
   teacher_vectors: runs/exp01/teacher_vectors.json
   hierarchies_json: runs/exp01/concept_hierarchies.json
+  activations: runs/exp01/activations.h5
 logging:
   save_dir: runs/exp02b
 data:
