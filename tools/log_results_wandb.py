@@ -70,6 +70,19 @@ def main():
         })
         wandb.save(str(base / "exp03" / "euclid_vs_causal.json"))
 
+    # Exp02b (logits ratio invariance)
+    ri2 = read_json(base / "exp02b" / "ratio_invariance_logits.json")
+    if ri2:
+        s = ri2.get("summary", {})
+        for k, v in s.items():
+            if isinstance(v, dict):
+                wandb.log({
+                    f"exp02b/{k}_median_kl": v.get("median_kl"),
+                    f"exp02b/{k}_median_parent_ddelta": v.get("median_parent_ddelta"),
+                    f"exp02b/{k}_median_child_ddelta_abs": v.get("median_child_ddelta_abs"),
+                })
+        wandb.save(str(base / "exp02b" / "ratio_invariance_logits.json"))
+
     # Exp04
     b4 = read_json(base / "exp04" / "boundary_normals.json")
     if b4:
@@ -219,15 +232,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # Exp02b (logits ratio invariance)
-    ri2 = read_json(base / "exp02b" / "ratio_invariance_logits.json")
-    if ri2:
-        s = ri2.get("summary", {})
-        for k, v in s.items():
-            if isinstance(v, dict):
-                wandb.log({
-                    f"exp02b/{k}_median_kl": v.get("median_kl"),
-                    f"exp02b/{k}_median_parent_ddelta": v.get("median_parent_ddelta"),
-                    f"exp02b/{k}_median_child_ddelta_abs": v.get("median_child_ddelta_abs"),
-                })
-        wandb.save(str(base / "exp02b" / "ratio_invariance_logits.json"))
