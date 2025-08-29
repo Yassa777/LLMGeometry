@@ -26,6 +26,15 @@ HF models and a simple Phase-1-style pipeline.
   - `python tools/figures.py --base runs`
     - Produces PNGs under `runs/figures/` for Exp01–Exp10, including Exp02–Exp06.
 
+## Preparing Inputs
+
+- Concept hierarchies: provide a JSON at `runs/exp01/concept_hierarchies.json` with fields
+  `parent`, `children`, `parent_prompts`, `child_prompts` (see `llmgeometry/concepts.py`).
+- Hierarchical activations (HDF5):
+  - Build from the hierarchy JSON via:
+    - `python tools/build_activations.py --model distilgpt2 --hier runs/exp01/concept_hierarchies.json --out runs/exp01/activations.h5 --device cpu`
+  - The script populates per-concept positive/negative activations (heuristic negatives from siblings/others).
+
 ## Status
 
 This is a fresh scaffold; geometry + metrics land next.

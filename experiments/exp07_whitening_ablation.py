@@ -22,7 +22,8 @@ from llmgeometry import CausalGeometry
 
 
 def load_unembedding(model_name: str, device: str = "cpu") -> torch.Tensor:
-    mdl = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, device_map={"": device})
+    dtype = torch.bfloat16 if str(device).startswith("cuda") else torch.float32
+    mdl = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype, low_cpu_mem_usage=True, device_map={"": device})
     if hasattr(mdl, "lm_head") and isinstance(mdl.lm_head, torch.nn.Module):
         U = mdl.lm_head.weight.detach().to("cpu")
     else:
@@ -75,4 +76,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

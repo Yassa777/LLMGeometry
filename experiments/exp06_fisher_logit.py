@@ -24,10 +24,13 @@ from llmgeometry.loaders import load_teacher_vectors, load_geometry, save_json
 
 
 def sample_prompts(hierarchies, k: int = 50) -> List[str]:
-    out = []
+    """Collect a small prompt set from hierarchy JSON (dicts or dataclass-serialized)."""
+    out: List[str] = []
     for h in hierarchies:
-        out.extend(h.parent_prompts[:2])
-        for cid, ps in h.child_prompts.items():
+        parent_prompts = h.get("parent_prompts", []) if isinstance(h, dict) else getattr(h, "parent_prompts", [])
+        out.extend(parent_prompts[:2])
+        child_prompts = h.get("child_prompts", {}) if isinstance(h, dict) else getattr(h, "child_prompts", {})
+        for ps in child_prompts.values():
             out.extend(ps[:1])
         if len(out) >= k:
             break
@@ -45,7 +48,8 @@ def main():
 
     model_name = cfg["model"]["name"]
     device = cfg["run"].get("device", "cpu")
-    mdl = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, device_map={"": device})
+    dtype = torch.bfloat16 if str(device).startswith("cuda") else torch.float32
+    mdl = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype, low_cpu_mem_usage=True, device_map={"": device})
     tok = AutoTokenizer.from_pretrained(model_name)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
@@ -59,7 +63,7 @@ def main():
     # Collect last-token probs/logits
     probs = []
     logits = []
-    with torch.no_grad(), torch.autocast(device_type=torch.device(device).type, dtype=torch.bfloat16):
+    with torch.no_grad():
         for p in prompts:
             inputs = tok(p, return_tensors="pt", truncation=True, max_length=64).to(device)
             out = mdl(**inputs)
@@ -73,17 +77,29 @@ def main():
     fisher_diag = (P * (1 - P)).mean(dim=0) + 1e-5
     var_diag = (L - L.mean(dim=0, keepdim=True)).pow(2).mean(dim=0) + 1e-5
 
-    # Form diagonal W approximations
-    W_f = torch.diag(1.0 / torch.sqrt(fisher_diag))
-    W_l = torch.diag(1.0 / torch.sqrt(var_diag))
+    # Map vocab-diagonal stats to residual-diagonal via U (unembedding)
+    # diag(U^T diag(d) U)[j] = sum_v d[v] * U[v,j]^2
+    with torch.no_grad():
+        U = mdl.get_output_embeddings().weight.detach().to("cpu", dtype=torch.float32)  # [V, d]
+    Ud2 = (U ** 2).t()  # [d, V]
+    d_f = Ud2 @ fisher_diag  # [d]
+    d_l = Ud2 @ var_diag     # [d]
+    d_f = d_f + 1e-5
+    d_l = d_l + 1e-5
+
+    # Form diagonal W approximations in residual space
+    W_f = torch.diag(1.0 / torch.sqrt(d_f))
+    W_l = torch.diag(1.0 / torch.sqrt(d_l))
 
     # Compare to baseline geometry via a rough angle check on a few deltas
     def angle_summary(Wdiag):
-        # create a fake geometry with diag Sigma implied by Wdiag
+        # Construct a causal geometry with diagonal Sigma consistent with W
         d = Wdiag.shape[0]
-        geom = CausalGeometry(torch.eye(d))
-        geom.W = Wdiag
-        geom.Sigma = torch.inverse(Wdiag) @ torch.inverse(Wdiag).t()
+        geom = CausalGeometry(torch.eye(d), shrinkage=0.0)
+        geom.W = Wdiag.to(torch.float32)
+        # If W = diag(inv_sqrt(var)), then Sigma ≈ diag(var)
+        var = torch.diag(Wdiag).pow(-2)
+        geom.Sigma = torch.diag(var)
         # angles between a few parent/deltas (fallback to causal norms of deltas)
         angs = []
         count = 0
@@ -115,4 +131,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

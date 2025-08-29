@@ -1,0 +1,10 @@
+run:
+  device: cpu
+model:
+  name: distilgpt2
+inputs:
+  teacher_vectors: runs/exp01/teacher_vectors.json
+logging:
+  save_dir: runs/exp07
+geometry:
+  shrinkages: [0.0, 0.05]

@@ -1,0 +1,5 @@
+inputs:
+  teacher_vectors_list:
+    - runs/exp01/teacher_vectors.json
+logging:
+  save_dir: runs/exp08

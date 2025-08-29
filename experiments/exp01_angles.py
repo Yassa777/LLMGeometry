@@ -28,7 +28,8 @@ from llmgeometry import (
 
 def load_unembedding(model_name: str, device: str = "cpu") -> torch.Tensor:
     from transformers import AutoModelForCausalLM
-    mdl = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, device_map={"": device})
+    dtype = torch.bfloat16 if str(device).startswith("cuda") else torch.float32
+    mdl = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype, low_cpu_mem_usage=True, device_map={"": device})
     if hasattr(mdl, "lm_head") and isinstance(mdl.lm_head, torch.nn.Module):
         U = mdl.lm_head.weight.detach().to("cpu")
     else:
@@ -79,6 +80,17 @@ def main():
 
     # Angles
     stats = hierarchical_orthogonality(parent_vecs, child_deltas, geom, threshold_deg=float(cfg.get("eval", {}).get("angle_threshold_deg", 80)))
+    # Collect raw angles for figures
+    angles_deg = []
+    for pid, deltas in child_deltas.items():
+        if pid not in parent_vecs:
+            continue
+        p = parent_vecs[pid]
+        for cid, d in deltas.items():
+            if torch.norm(d) < 1e-8:
+                continue
+            ang = geom.causal_angle(p, d)
+            angles_deg.append(float(torch.rad2deg(ang).item()))
 
     out = {
         "parent_vectors": {k: v.tolist() for k, v in parent_vecs.items()},
@@ -86,6 +98,7 @@ def main():
         "child_deltas": {pid: {cid: v.tolist() for cid, v in d.items()} for pid, d in child_deltas.items()},
         "geometry_stats": geom.whitening_invariant_stats(),
         "angle_stats": stats,
+        "angles_deg": angles_deg,
     }
     with open(out_dir / "teacher_vectors.json", "w") as f:
         json.dump(out, f, indent=2)
@@ -95,4 +108,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

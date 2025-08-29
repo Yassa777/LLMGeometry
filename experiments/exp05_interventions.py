@@ -31,7 +31,8 @@ def main():
 
     model_name = cfg["model"]["name"]
     device = cfg["run"].get("device", "cpu")
-    mdl = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, device_map={"": device})
+    dtype = torch.bfloat16 if str(device).startswith("cuda") else torch.float32
+    mdl = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype, low_cpu_mem_usage=True, device_map={"": device})
     tok = AutoTokenizer.from_pretrained(model_name)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
