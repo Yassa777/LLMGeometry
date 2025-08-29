@@ -39,13 +39,14 @@ def fit_normals_for_parent(
     # Build subspace from deltas
     if not child_deltas:
         return {}
-    M = torch.stack(list(child_deltas.values()))  # [n_children, d]
+    # Build subspace in whitened space to match projection space
+    M = torch.stack([geom.whiten(v.to(torch.float32)) for v in child_deltas.values()])  # [n_children, d]
     U, S, Vh = torch.linalg.svd(M, full_matrices=False)
     V = Vh.t()
     k_energy = int((torch.cumsum(S, dim=0) / (S.sum() + 1e-12) <= 0.85).sum().item()) + 1
     k = min(subspace_dim, V.shape[1], k_energy)
-    Vk = V[:, :k]             # [d, k]
-    up = Vk                   # [d, k]
+    Vk_w = V[:, :k]           # [d, k] in whitened coords
+    up = Vk_w                 # [d, k]
 
     # Prepare dataset: gather pos/neg per child c under this parent
     angles: Dict[str, float] = {}
@@ -63,14 +64,15 @@ def fit_normals_for_parent(
         y = torch.cat([torch.ones(len(pos)), torch.zeros(len(neg))]).numpy()
         # Whiten and project to subspace
         Xw = geom.whiten(X)
-        Xs = Xw @ up    # [N, k]
+        Xs = Xw @ up    # [N, k] whitened subspace
 
         # Fit logistic
         clf = LogisticRegression(max_iter=200, solver="lbfgs")
         clf.fit(Xs.numpy(), y)
         w_s = torch.tensor(clf.coef_[0], dtype=torch.float32)  # [k]
         # Normal in original space (causal): map up then normalize causally
-        normal_full = (up @ w_s).to(torch.float32)
+        normal_w = (up @ w_s).to(torch.float32)
+        normal_full = geom.unwhiten(normal_w)
         normal_full = geom.normalize_causal(normal_full)
 
         # Compare to teacher delta

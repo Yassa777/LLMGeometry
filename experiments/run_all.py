@@ -27,6 +27,7 @@ def main():
     ap = argparse.ArgumentParser(description="Run geometry experiments")
     ap.add_argument("--exp01", action="store_true", help="Run Exp01: angles")
     ap.add_argument("--exp02", action="store_true", help="Run Exp02: ratio invariance")
+    ap.add_argument("--exp02b", action="store_true", help="Run Exp02b: ratio invariance (logits)")
     ap.add_argument("--exp03", action="store_true", help="Run Exp03: euclid vs causal")
     ap.add_argument("--exp03b", action="store_true", help="Run Exp03b: contrasts (LDA vs mean-diff)")
     ap.add_argument("--exp04", action="store_true", help="Run Exp04: boundary normals")
@@ -38,6 +39,7 @@ def main():
     ap.add_argument("--exp10", action="store_true", help="Run Exp10: layer variants")
     ap.add_argument("--config01", type=str, default="configs/exp01.yaml")
     ap.add_argument("--config02", type=str, default="configs/exp02.yaml")
+    ap.add_argument("--config02b", type=str, default="configs/exp02b.yaml")
     ap.add_argument("--config03", type=str, default="configs/exp03.yaml")
     ap.add_argument("--config03b", type=str, default="configs/exp03b.yaml")
     ap.add_argument("--config04", type=str, default="configs/exp04.yaml")
@@ -66,6 +68,10 @@ def main():
             sys.exit(rc)
     if args.exp03 or do_all:
         rc = run([py, str(root / "exp03_euclid_vs_causal.py"), "--config", args.config03])
+        if rc != 0:
+            sys.exit(rc)
+    if args.exp02b or do_all:
+        rc = run([py, str(root / "exp02b_ratio_invariance_logits.py"), "--config", args.config02b])
         if rc != 0:
             sys.exit(rc)
     if args.exp04 or do_all:

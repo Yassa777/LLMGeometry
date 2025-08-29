@@ -156,3 +156,20 @@ class CausalGeometry:
             "tolerance": float(tolerance),
         }
 
+
+def geometry_from_shuffled_unembedding(U: torch.Tensor, shrinkage: float = 0.05, seed: int = 0) -> CausalGeometry:
+    """Return a CausalGeometry built from a row-shuffled unembedding matrix.
+
+    Parameters
+    ----------
+    U : torch.Tensor
+        Unembedding matrix of shape [V, d]. Rows will be randomly permuted.
+    shrinkage : float
+        Ridge term for ZCA whitening.
+    seed : int
+        RNG seed for reproducible permutation.
+    """
+    g = torch.Generator().manual_seed(int(seed))
+    perm = torch.randperm(U.size(0), generator=g)
+    U_shuf = U[perm].contiguous()
+    return CausalGeometry(U_shuf, shrinkage=shrinkage)

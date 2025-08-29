@@ -6,6 +6,8 @@ Produces:
   - fig_angles_hist.png from Exp01 teacher_vectors.json
   - fig_euclid_vs_causal.png from Exp03 euclid_vs_causal.json
   - fig_ratio_invariance.png from Exp02 ratio_invariance.json
+  - fig_ratio_invariance_logits.png from Exp02b ratio_invariance_logits.json
+  - fig_ratio_invariance_ddelta.png ΔΔ bars from Exp02b ratio_invariance_logits.json
   - ratio_invariance_per_parent/*.png small multiples per-parent (Exp02)
   - fig_boundary_normals.png from Exp04 boundary_normals.json
   - fig_boundary_normals_per_parent.png bar of per-parent medians (Exp04)
@@ -24,6 +26,7 @@ Produces:
   - fig_contrasts_auroc.png from Exp03b contrasts.json
   - fig_estimators_auroc.png from Exp05b estimators.json
   - fig_estimators_angles.png from Exp05b estimators.json (if teacher angles present)
+  - fig_offtarget_delta.png from Exp05b estimators.json (if off-target ΔΔ present)
 """
 
 from __future__ import annotations
@@ -107,6 +110,76 @@ def fig_ratio_invariance(path: str, out_path: str) -> None:
     plt.xlabel(r"Intervention magnitude $\alpha$")
     plt.ylabel("KL(base || intervened)")
     plt.title("Ratio-invariance across magnitudes")
+    plt.legend(frameon=False)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_ratio_invariance_logits(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_parent", {})
+    # Aggregate median KL by alpha and condition
+    conds = set()
+    for pid in per:
+        conds.update(per[pid].keys())
+    conds = sorted(list(conds))
+    if not conds:
+        return
+    # Build curves per condition (median across parents)
+    curves = {}
+    alphas = None
+    for cond in conds:
+        amap = {}
+        for pid, d in per.items():
+            if cond not in d:
+                continue
+            for a, dd in d[cond].items():
+                amap.setdefault(float(a), []).append(float(dd.get("median_kl", np.nan)))
+        xs = sorted(amap.keys())
+        ys = [float(np.nanmedian(amap[x])) if amap[x] else np.nan for x in xs]
+        curves[cond] = (xs, ys)
+        if alphas is None:
+            alphas = xs
+    if not curves:
+        return
+    plt.figure(figsize=(6, 3.2))
+    colors = {"causal": "#1f77b4", "euclid": "#999999", "random_parent": "#2ca02c", "shuffled_U": "#ff7f0e"}
+    for cond, (xs, ys) in curves.items():
+        plt.plot(xs, ys, marker="o", label=cond, color=colors.get(cond, None))
+    plt.xlabel(r"Intervention magnitude $\alpha$")
+    plt.ylabel("Median KL(base || after)")
+    plt.title("Ratio invariance under edits")
+    plt.legend(frameon=False, ncol=2)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_ratio_invariance_ddelta(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_parent", {})
+    # Bars over alpha: parent ΔΔ vs child |ΔΔ| (causal condition)
+    amap_p, amap_c = {}, {}
+    for pid, d in per.items():
+        if "causal" not in d:
+            continue
+        for a, dd in d["causal"].items():
+            amap_p.setdefault(float(a), []).append(float(dd.get("parent_ddelta", np.nan)))
+            amap_c.setdefault(float(a), []).append(float(dd.get("child_ddelta_abs", np.nan)))
+    if not amap_p:
+        return
+    xs = sorted([x for x in amap_p.keys() if x != 0.0])
+    pmed = [float(np.nanmedian(amap_p[x])) for x in xs]
+    cmed = [float(np.nanmedian(amap_c.get(x, []))) for x in xs]
+    plt.figure(figsize=(6, 3.2))
+    width = 0.35
+    idx = np.arange(len(xs))
+    plt.bar(idx - width/2, pmed, width=width, label="parent ΔΔ", color="#1f77b4")
+    plt.bar(idx + width/2, cmed, width=width, label="child |ΔΔ|", color="#ff7f0e")
+    plt.xticks(idx, [str(x) for x in xs])
+    plt.ylabel("Median ΔΔ (logits)")
+    plt.title("Edit locality under ratio-invariance")
     plt.legend(frameon=False)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     plt.tight_layout()
@@ -622,6 +695,29 @@ def fig_estimators_angles(path: str, out_path: str) -> None:
     plt.savefig(out_path, dpi=200)
     plt.close()
 
+def fig_offtarget_delta(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_concept", {})
+    dd_lda, dd_md, dd_l2 = [], [], []
+    for v in per.values():
+        for key, arr in [("offtarget_ddelta_abs_lda", dd_lda), ("offtarget_ddelta_abs_mean_diff", dd_md), ("offtarget_ddelta_abs_l2probe", dd_l2)]:
+            if key in v and isinstance(v[key], list):
+                arr.extend([float(x) for x in v[key]])
+    if not (dd_lda or dd_md or dd_l2):
+        return
+    # Violin-like: show distributions as box or violin (use simple box for robustness)
+    data_arr = [dd_lda, dd_md, dd_l2]
+    labels = ["LDA", "MeanDiff", "L2Probe"]
+    plt.figure(figsize=(6, 3.2))
+    plt.violinplot(data_arr, showmeans=True, showextrema=False)
+    plt.xticks([1, 2, 3], labels)
+    plt.ylabel("|ΔΔ| on unrelated tokens (logits)")
+    plt.title("Off-target ΔΔ across estimators")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
 def main():
     ap = argparse.ArgumentParser(description="Build geometry figures")
     ap.add_argument("--base", type=str, default="runs")
@@ -642,6 +738,12 @@ def main():
     if rinv.exists():
         fig_ratio_invariance(str(rinv), str(base / "figures" / "fig_ratio_invariance.png"))
         print("Wrote:", base / "figures" / "fig_ratio_invariance.png")
+    rinvl = base / "exp02b" / "ratio_invariance_logits.json"
+    if rinvl.exists():
+        fig_ratio_invariance_logits(str(rinvl), str(base / "figures" / "fig_ratio_invariance_logits.png"))
+        print("Wrote:", base / "figures" / "fig_ratio_invariance_logits.png")
+        fig_ratio_invariance_ddelta(str(rinvl), str(base / "figures" / "fig_ratio_invariance_ddelta.png"))
+        print("Wrote:", base / "figures" / "fig_ratio_invariance_ddelta.png")
         fig_ratio_invariance_per_parent(str(rinv), str(base / "figures"))
         print("Wrote:", base / "figures" / "fig_ratio_invariance_per_parent.png")
 
@@ -707,6 +809,8 @@ def main():
         print("Wrote:", base / "figures" / "fig_estimators_auroc.png")
         fig_estimators_angles(str(e5b), str(base / "figures" / "fig_estimators_angles.png"))
         print("Wrote:", base / "figures" / "fig_estimators_angles.png")
+        fig_offtarget_delta(str(e5b), str(base / "figures" / "fig_offtarget_delta.png"))
+        print("Wrote:", base / "figures" / "fig_offtarget_delta.png")
 
 
 if __name__ == "__main__":
