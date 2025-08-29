@@ -19,6 +19,10 @@ Produces:
   - fig_token_granularity.png from Exp09 token_granularity.json
   - fig_angle_vs_freq.png from Exp09 angle_vs_logfreq curve (if present)
   - fig_layer_variants.png from Exp10 layer_variants.json
+  - fig_contrasts_angle_hist.png from Exp03b contrasts.json
+  - fig_contrasts_auroc.png from Exp03b contrasts.json
+  - fig_estimators_auroc.png from Exp05b estimators.json
+  - fig_estimators_angles.png from Exp05b estimators.json (if teacher angles present)
 """
 
 from __future__ import annotations
@@ -478,6 +482,113 @@ def fig_layer_variants(path: str, out_path: str) -> None:
     plt.savefig(out_path, dpi=200)
     plt.close()
 
+def fig_contrasts_angle_hist(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_concept", {})
+    angles = []
+    for v in per.values():
+        a = v.get("angle_deg")
+        if a is None:
+            continue
+        try:
+            angles.append(float(a))
+        except Exception:
+            continue
+    if not angles:
+        return
+    plt.figure(figsize=(5, 3.2))
+    plt.hist(angles, bins=36, density=True, alpha=0.85, color="#9467bd")
+    plt.xlabel("Angle (deg) between LDA and mean-diff")
+    plt.ylabel("Density")
+    plt.title("Contrasts: LDA vs class-mean")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_contrasts_auroc(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_concept", {})
+    a_lda, a_md = [], []
+    for v in per.values():
+        if "auroc_lda" in v:
+            try:
+                a_lda.append(float(v["auroc_lda"]))
+            except Exception:
+                pass
+        if "auroc_mean_diff" in v:
+            try:
+                a_md.append(float(v["auroc_mean_diff"]))
+            except Exception:
+                pass
+    if not a_lda and not a_md:
+        return
+    ys = [float(np.nanmedian(a_lda)) if a_lda else np.nan,
+          float(np.nanmedian(a_md)) if a_md else np.nan]
+    plt.figure(figsize=(4.5, 3.2))
+    plt.bar(["LDA", "MeanDiff"], ys, color=["#1f77b4", "#ff7f0e"]) 
+    plt.ylim(0.0, 1.0)
+    plt.ylabel("Median AUROC")
+    plt.title("Contrasts AUROC")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_estimators_auroc(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_concept", {})
+    a_lda, a_md, a_l2 = [], [], []
+    for v in per.values():
+        for key, arr in [("auroc_lda", a_lda), ("auroc_mean_diff", a_md), ("auroc_l2probe", a_l2)]:
+            if key in v:
+                try:
+                    arr.append(float(v[key]))
+                except Exception:
+                    pass
+    if not (a_lda or a_md or a_l2):
+        return
+    labels = ["LDA", "MeanDiff", "L2Probe"]
+    vals = [float(np.nanmedian(a_lda)) if a_lda else np.nan,
+            float(np.nanmedian(a_md)) if a_md else np.nan,
+            float(np.nanmedian(a_l2)) if a_l2 else np.nan]
+    plt.figure(figsize=(5.5, 3.2))
+    plt.bar(labels, vals, color=["#1f77b4", "#ff7f0e", "#2ca02c"]) 
+    plt.ylim(0.0, 1.0)
+    plt.ylabel("Median AUROC")
+    plt.title("Estimator shoot-out")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
+def fig_estimators_angles(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_concept", {})
+    ang_lda, ang_md, ang_l2 = [], [], []
+    for v in per.values():
+        for key, arr in [("angle_to_teacher_lda", ang_lda), ("angle_to_teacher_mean_diff", ang_md), ("angle_to_teacher_l2probe", ang_l2)]:
+            if key in v:
+                try:
+                    arr.append(float(v[key]))
+                except Exception:
+                    pass
+    if not (ang_lda or ang_md or ang_l2):
+        return
+    labels = ["LDA", "MeanDiff", "L2Probe"]
+    vals = [float(np.nanmedian(ang_lda)) if ang_lda else np.nan,
+            float(np.nanmedian(ang_md)) if ang_md else np.nan,
+            float(np.nanmedian(ang_l2)) if ang_l2 else np.nan]
+    plt.figure(figsize=(5.5, 3.2))
+    plt.bar(labels, vals, color=["#1f77b4", "#ff7f0e", "#2ca02c"]) 
+    plt.axhline(80, linestyle="--", color="gray", linewidth=1)
+    plt.ylabel("Median angle to teacher (deg)")
+    plt.title("Estimator angles vs teacher")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
 def main():
     ap = argparse.ArgumentParser(description="Build geometry figures")
     ap.add_argument("--base", type=str, default="runs")
@@ -545,6 +656,22 @@ def main():
     if lvar.exists():
         fig_layer_variants(str(lvar), str(base / "figures" / "fig_layer_variants.png"))
         print("Wrote:", base / "figures" / "fig_layer_variants.png")
+
+    # Exp03b: contrasts
+    c3b = base / "exp03b" / "contrasts.json"
+    if c3b.exists():
+        fig_contrasts_angle_hist(str(c3b), str(base / "figures" / "fig_contrasts_angle_hist.png"))
+        print("Wrote:", base / "figures" / "fig_contrasts_angle_hist.png")
+        fig_contrasts_auroc(str(c3b), str(base / "figures" / "fig_contrasts_auroc.png"))
+        print("Wrote:", base / "figures" / "fig_contrasts_auroc.png")
+
+    # Exp05b: estimator shoot-out
+    e5b = base / "exp05b" / "estimators.json"
+    if e5b.exists():
+        fig_estimators_auroc(str(e5b), str(base / "figures" / "fig_estimators_auroc.png"))
+        print("Wrote:", base / "figures" / "fig_estimators_auroc.png")
+        fig_estimators_angles(str(e5b), str(base / "figures" / "fig_estimators_angles.png"))
+        print("Wrote:", base / "figures" / "fig_estimators_angles.png")
 
 
 if __name__ == "__main__":
