@@ -1,0 +1,5 @@
+inputs:
+  last_token_tv: runs/exp01/teacher_vectors.json
+  pooled_tv: runs/exp01_pooled/teacher_vectors.json
+logging:
+  save_dir: runs/exp09
