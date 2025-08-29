@@ -84,3 +84,73 @@ def steering_smoke_mean_abs_delta(
     mad = torch.mean(torch.abs(out["logit_deltas"]))
     return float(mad.item())
 
+
+@torch.no_grad()
+def steer_at_layer(
+    model,
+    tokenizer,
+    prompts: List[str],
+    direction: torch.Tensor,
+    *,
+    magnitude: float = 0.5,
+    layer_index: int = -1,
+    device: Optional[str] = None,
+):
+    """Apply an edit at a specific transformer layer and return before/after logits.
+
+    Notes:
+      - Supports GPT2-like modules with attribute `transformer.h`.
+      - Attempts to handle models exposing `model.layers` or `gpt_neox.layers` similarly.
+      - Edits the last token only.
+    """
+    mdl_dev = next(model.parameters()).device
+    dev = torch.device(device) if device is not None else mdl_dev
+
+    tok = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(dev)
+
+    # Baseline pass
+    outputs0 = model(**tok)
+    logits0 = outputs0.logits.detach().cpu()
+
+    # Find layer module list
+    modules = None
+    if hasattr(model, "transformer") and hasattr(model.transformer, "h"):
+        modules = list(model.transformer.h)
+    elif hasattr(model, "model") and hasattr(model.model, "layers"):
+        modules = list(model.model.layers)
+    elif hasattr(model, "gpt_neox") and hasattr(model.gpt_neox, "layers"):
+        modules = list(model.gpt_neox.layers)
+    else:
+        raise RuntimeError("Unsupported model architecture for steer_at_layer")
+
+    n_layers = len(modules)
+    idx = layer_index if layer_index >= 0 else (n_layers + layer_index)
+    if idx < 0 or idx >= n_layers:
+        raise IndexError(f"layer_index {layer_index} out of range for {n_layers} layers")
+    target = modules[idx]
+
+    last_idx = tok["attention_mask"].sum(dim=1) - 1
+    vv = direction.to(dev, dtype=next(model.parameters()).dtype)
+    mag = float(magnitude)
+
+    def hook_fn(module, inputs, output):
+        # output may be Tensor or tuple(Tensor, ...)
+        if isinstance(output, tuple):
+            h = output[0]
+            rest = output[1:]
+        else:
+            h = output
+            rest = ()
+        hh = h.clone()
+        hh[torch.arange(hh.size(0), device=hh.device), last_idx] = (
+            hh[torch.arange(hh.size(0), device=hh.device), last_idx] + mag * vv
+        )
+        return (hh, *rest) if rest else hh
+
+    handle = target.register_forward_hook(hook_fn)
+    try:
+        outputs1 = model(**tok)
+    finally:
+        handle.remove()
+    logits1 = outputs1.logits.detach().cpu()
+    return {"baseline_logits": logits0, "steered_logits": logits1}
