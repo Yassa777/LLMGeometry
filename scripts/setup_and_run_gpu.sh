@@ -150,6 +150,7 @@ PYTHONPATH=. python experiments/exp07_whitening_ablation.py --config runs/gpu-co
 PYTHONPATH=. python experiments/exp08_dataset_variants.py --config configs/exp08.yaml
 PYTHONPATH=. python experiments/exp09_token_granularity.py --config configs/exp09.yaml
 PYTHONPATH=. python experiments/exp10_layer_variants.py --config runs/gpu-configs/exp10.yaml
+PYTHONPATH=. python experiments/exp10_emergence_curves.py --config runs/gpu-configs/exp10b.yaml
 
 echo "[6/8] Building figures..."
 PYTHONPATH=. python tools/figures.py --base runs

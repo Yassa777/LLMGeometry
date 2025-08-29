@@ -146,7 +146,12 @@ def main():
         v = geom.normalize_causal(pvec)
         sib = sibling_ids.get(pid, {})
         for li in layers:
-            out = steer_at_layer(mdl, tok, prompts, v, magnitude=alpha, layer_index=int(li), device=device)
+            try:
+                out = steer_at_layer(mdl, tok, prompts, v, magnitude=alpha, layer_index=int(li), device=device)
+            except Exception:
+                continue
+            if out["baseline_logits"].shape != out["steered_logits"].shape:
+                continue
             kl_list = []
             for ids in sib.values():
                 if not ids:
@@ -171,4 +176,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

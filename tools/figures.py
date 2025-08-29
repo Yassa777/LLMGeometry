@@ -22,6 +22,7 @@ Produces:
   - fig_token_granularity.png from Exp09 token_granularity.json
   - fig_angle_vs_freq.png from Exp09 angle_vs_logfreq curve (if present)
   - fig_layer_variants.png from Exp10 layer_variants.json
+  - fig_emergence_curves.png from Exp10b emergence_curves.json
   - fig_contrasts_angle_hist.png from Exp03b contrasts.json
   - fig_contrasts_auroc.png from Exp03b contrasts.json
   - fig_estimators_auroc.png from Exp05b estimators.json
@@ -588,6 +589,31 @@ def fig_layer_variants(path: str, out_path: str) -> None:
     plt.savefig(out_path, dpi=200)
     plt.close()
 
+def fig_emergence_curves(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    a = data.get("angle_vs_layer", {})
+    k = data.get("kl_vs_layer", {})
+    if not a and not k:
+        return
+    # Layers as ints sorted ascending by depth (use numeric sort of keys)
+    ls = sorted([int(x) for x in set(list(a.keys()) + list(k.keys()))])
+    ys_a = [float(a.get(str(li), np.nan)) for li in ls]
+    ys_k = [float(k.get(str(li), np.nan)) for li in ls]
+    fig, axs = plt.subplots(1, 2, figsize=(9, 3.2))
+    axs[0].plot(ls, ys_a, marker="o", color="#1f77b4")
+    axs[0].axhline(80, linestyle="--", color="gray", linewidth=1)
+    axs[0].set_xlabel("Layer index")
+    axs[0].set_ylabel("Median angle (deg)")
+    axs[0].set_title("Angle vs layer")
+    axs[1].plot(ls, ys_k, marker="o", color="#ff7f0e")
+    axs[1].set_xlabel("Layer index")
+    axs[1].set_ylabel("Median KL(base||after)")
+    axs[1].set_title("Sibling-KL vs layer")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
+
 def fig_contrasts_angle_hist(path: str, out_path: str) -> None:
     data = json.load(open(path))
     per = data.get("per_concept", {})
@@ -793,6 +819,10 @@ def main():
     if lvar.exists():
         fig_layer_variants(str(lvar), str(base / "figures" / "fig_layer_variants.png"))
         print("Wrote:", base / "figures" / "fig_layer_variants.png")
+    emer = base / "exp10b" / "emergence_curves.json"
+    if emer.exists():
+        fig_emergence_curves(str(emer), str(base / "figures" / "fig_emergence_curves.png"))
+        print("Wrote:", base / "figures" / "fig_emergence_curves.png")
 
     # Exp03b: contrasts
     c3b = base / "exp03b" / "contrasts.json"

@@ -37,6 +37,7 @@ def main():
     ap.add_argument("--exp08", action="store_true", help="Run Exp08: dataset variants")
     ap.add_argument("--exp09", action="store_true", help="Run Exp09: token granularity")
     ap.add_argument("--exp10", action="store_true", help="Run Exp10: layer variants")
+    ap.add_argument("--exp10b", action="store_true", help="Run Exp10b: emergence curves")
     ap.add_argument("--config01", type=str, default="configs/exp01.yaml")
     ap.add_argument("--config02", type=str, default="configs/exp02.yaml")
     ap.add_argument("--config02b", type=str, default="configs/exp02b.yaml")
@@ -49,6 +50,7 @@ def main():
     ap.add_argument("--config08", type=str, default="configs/exp08.yaml")
     ap.add_argument("--config09", type=str, default="configs/exp09.yaml")
     ap.add_argument("--config10", type=str, default="configs/exp10.yaml")
+    ap.add_argument("--config10b", type=str, default="configs/exp10b.yaml")
     args = ap.parse_args()
 
     # Default: run all
@@ -104,6 +106,10 @@ def main():
             sys.exit(rc)
     if args.exp10 or do_all:
         rc = run([py, str(root / "exp10_layer_variants.py"), "--config", args.config10])
+        if rc != 0:
+            sys.exit(rc)
+    if args.exp10b or do_all:
+        rc = run([py, str(root / "exp10_emergence_curves.py"), "--config", args.config10b])
         if rc != 0:
             sys.exit(rc)
 
