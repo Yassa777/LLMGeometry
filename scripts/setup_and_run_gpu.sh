@@ -141,8 +141,10 @@ else
 fi
 PYTHONPATH=. python experiments/exp02_ratio_invariance.py --config configs/exp02.yaml
 PYTHONPATH=. python experiments/exp03_euclid_vs_causal.py --config configs/exp03.yaml
+PYTHONPATH=. python experiments/exp03_contrasts.py --config configs/exp03b.yaml
 PYTHONPATH=. python experiments/exp04_boundary_normals.py --config configs/exp04.yaml
 PYTHONPATH=. python experiments/exp05_interventions.py --config runs/gpu-configs/exp05.yaml
+PYTHONPATH=. python experiments/exp05_estimators.py --config configs/exp05b.yaml
 PYTHONPATH=. python experiments/exp06_fisher_logit.py --config runs/gpu-configs/exp06.yaml
 PYTHONPATH=. python experiments/exp07_whitening_ablation.py --config runs/gpu-configs/exp07.yaml
 PYTHONPATH=. python experiments/exp08_dataset_variants.py --config configs/exp08.yaml

@@ -10,3 +10,5 @@ logging:
   save_dir: runs/exp06
 data:
   n_prompts: 50
+eval:
+  layers: [-1, -2, -3, -6]

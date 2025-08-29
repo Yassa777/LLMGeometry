@@ -80,8 +80,9 @@ def main():
 
     # Angles
     stats = hierarchical_orthogonality(parent_vecs, child_deltas, geom, threshold_deg=float(cfg.get("eval", {}).get("angle_threshold_deg", 80)))
-    # Collect raw angles for figures
+    # Collect raw angles and pair mapping for figures and subset metrics
     angles_deg = []
+    angle_pairs = []
     for pid, deltas in child_deltas.items():
         if pid not in parent_vecs:
             continue
@@ -90,7 +91,9 @@ def main():
             if torch.norm(d) < 1e-8:
                 continue
             ang = geom.causal_angle(p, d)
-            angles_deg.append(float(torch.rad2deg(ang).item()))
+            ang_deg = float(torch.rad2deg(ang).item())
+            angles_deg.append(ang_deg)
+            angle_pairs.append({"parent_id": pid, "child_id": cid, "angle_deg": ang_deg})
 
     out = {
         "parent_vectors": {k: v.tolist() for k, v in parent_vecs.items()},
@@ -99,6 +102,7 @@ def main():
         "geometry_stats": geom.whitening_invariant_stats(),
         "angle_stats": stats,
         "angles_deg": angles_deg,
+        "angle_pairs": angle_pairs,
     }
     with open(out_dir / "teacher_vectors.json", "w") as f:
         json.dump(out, f, indent=2)

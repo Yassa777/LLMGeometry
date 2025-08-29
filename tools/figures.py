@@ -15,7 +15,9 @@ Produces:
   - fig_fisher_logit_delta.png deltas vs baseline (Exp06)
   - fig_whitening_ablation.png from Exp07 whitening_ablation.json
   - fig_dataset_variants.png from Exp08 dataset_variants.json
+  - fig_polysemy_subsets.png from Exp08 polysemy subsets (if present)
   - fig_token_granularity.png from Exp09 token_granularity.json
+  - fig_angle_vs_freq.png from Exp09 angle_vs_logfreq curve (if present)
   - fig_layer_variants.png from Exp10 layer_variants.json
 """
 
@@ -112,7 +114,11 @@ def fig_boundary_normals(path: str, out_path: str) -> None:
     # Flatten all child angles
     all_angles = []
     for pid, child_map in per.items():
-        for cid, ang in child_map.items():
+        if isinstance(child_map, dict) and "angles" in child_map:
+            ch = child_map.get("angles", {})
+        else:
+            ch = child_map
+        for cid, ang in ch.items():
             try:
                 all_angles.append(float(ang))
             except Exception:
@@ -354,6 +360,12 @@ def fig_fisher_logit_delta(path: str, out_path: str) -> None:
 def fig_whitening_ablation(path: str, out_path: str) -> None:
     data = json.load(open(path))
     res = data.get("results", {})
+    if not res and "by_model" in data:
+        # pick the first model's results
+        bym = data.get("by_model", {})
+        if bym:
+            first_key = sorted(bym.keys())[0]
+            res = bym[first_key]
     xs, ys = [], []
     for k, v in res.items():
         try:
@@ -394,6 +406,30 @@ def fig_dataset_variants(path: str, out_path: str) -> None:
     plt.savefig(out_path, dpi=200)
     plt.close()
 
+def fig_polysemy_subsets(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    per = data.get("per_variant", {})
+    # Merge across variants: average medians if multiple
+    mono, poly = [], []
+    for v in per.values():
+        p = v.get("polysemy", {})
+        if "monosemous_median" in p:
+            mono.append(float(p["monosemous_median"]))
+        if "polysemous_median" in p:
+            poly.append(float(p["polysemous_median"]))
+    if not mono and not poly:
+        return
+    vals = [np.nanmean(mono) if mono else np.nan, np.nanmean(poly) if poly else np.nan]
+    plt.figure(figsize=(4, 3.2))
+    plt.bar(["mono", "poly"], vals, color=["#2ca02c", "#d62728"]) 
+    plt.axhline(80, linestyle="--", color="gray", linewidth=1)
+    plt.ylabel("Median causal angle (deg)")
+    plt.title("Polysemy subsets")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+
 
 def fig_token_granularity(path: str, out_path: str) -> None:
     data = json.load(open(path))
@@ -408,6 +444,22 @@ def fig_token_granularity(path: str, out_path: str) -> None:
     plt.savefig(out_path, dpi=200)
     plt.close()
 
+def fig_angle_vs_freq(path: str, out_path: str) -> None:
+    data = json.load(open(path))
+    curv = data.get("angle_vs_logfreq", {})
+    if not curv:
+        return
+    xs = sorted(float(k) for k in curv.keys())
+    ys = [float(curv[str(k)]) for k in xs]
+    plt.figure(figsize=(5, 3.2))
+    plt.plot(xs, ys, marker="o", color="#9467bd")
+    plt.xlabel("Zipf frequency (log)")
+    plt.ylabel("Median angle (deg)")
+    plt.title("Angle vs log-frequency")
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
 
 def fig_layer_variants(path: str, out_path: str) -> None:
     data = json.load(open(path))
@@ -479,11 +531,15 @@ def main():
     if dsv.exists():
         fig_dataset_variants(str(dsv), str(base / "figures" / "fig_dataset_variants.png"))
         print("Wrote:", base / "figures" / "fig_dataset_variants.png")
+        fig_polysemy_subsets(str(dsv), str(base / "figures" / "fig_polysemy_subsets.png"))
+        print("Wrote:", base / "figures" / "fig_polysemy_subsets.png")
 
     tkg = base / "exp09" / "token_granularity.json"
     if tkg.exists():
         fig_token_granularity(str(tkg), str(base / "figures" / "fig_token_granularity.png"))
         print("Wrote:", base / "figures" / "fig_token_granularity.png")
+        fig_angle_vs_freq(str(tkg), str(base / "figures" / "fig_angle_vs_freq.png"))
+        print("Wrote:", base / "figures" / "fig_angle_vs_freq.png")
 
     lvar = base / "exp10" / "layer_variants.json"
     if lvar.exists():

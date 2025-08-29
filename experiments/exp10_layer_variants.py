@@ -69,6 +69,12 @@ def main():
         tok.pad_token = tok.eos_token
 
     parents, _, deltas = load_teacher_vectors(cfg["inputs"]["teacher_vectors"])
+    # Optional second split
+    parents_bad = None
+    deltas_bad = None
+    if "bad_teacher_vectors" in cfg.get("inputs", {}):
+        p2, _, d2 = load_teacher_vectors(cfg["inputs"]["bad_teacher_vectors"])
+        parents_bad, deltas_bad = p2, d2
     prompts = sample_prompts_from_json(hier_json, k=n_prompts)
 
     # Collect hidden states for specified layers and compute covariance
@@ -92,7 +98,12 @@ def main():
         geom = CausalGeometry(X, shrinkage=float(cfg.get("geometry", {}).get("shrinkage", 0.05)))
         med = angle_median(geom, parents, deltas)
         inv = geom.whitening_invariant_stats()
-        summaries[int(li)] = {**inv, "angle_median_deg": med}
+        entry = {**inv, "angle_median_deg": med}
+        if parents_bad is not None and deltas_bad is not None:
+            med_bad = angle_median(geom, parents_bad, deltas_bad)
+            entry["angle_median_deg_bad"] = med_bad
+            entry["delta_bad_minus_safe"] = float(med_bad - med)
+        summaries[int(li)] = entry
 
     save_json({"layers": summaries}, str(out_dir / "layer_variants.json"))
     print("Saved:", out_dir / "layer_variants.json")

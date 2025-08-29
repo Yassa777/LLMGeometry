@@ -125,6 +125,27 @@ def main():
         "fisher_diag": angle_summary(W_f),
         "logit_var_diag": angle_summary(W_l),
     }
+    # Optional per-layer hidden variance diagonals
+    layers = cfg.get("eval", {}).get("layers", [])
+    if layers:
+        # collect hidden states for specified layers across prompts
+        per_layer = {}
+        with torch.no_grad():
+            for p in prompts:
+                inputs = tok(p, return_tensors="pt", truncation=True, max_length=64).to(device)
+                out = mdl(**inputs, output_hidden_states=True)
+                hs = out.hidden_states  # tuple
+                for li in layers:
+                    H = hs[li].detach().float().cpu()  # [B,T,d]
+                    last = H[:, -1, :]
+                    per_layer.setdefault(int(li), []).append(last)
+        layer_summaries = {}
+        for li, chunks in per_layer.items():
+            X = torch.cat(chunks, dim=0)  # [N,d]
+            var = (X - X.mean(0, keepdim=True)).pow(2).mean(0) + 1e-5
+            W_h = torch.diag(1.0 / torch.sqrt(var))
+            layer_summaries[int(li)] = angle_summary(W_h)
+        summary["per_layer_hidden_var_diag"] = layer_summaries
     save_json(summary, str(out_dir / "fisher_logit_summary.json"))
     print("Saved:", out_dir / "fisher_logit_summary.json")
 

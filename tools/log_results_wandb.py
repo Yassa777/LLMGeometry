@@ -110,6 +110,28 @@ def main():
             })
         wandb.save(str(base / "exp06" / "fisher_logit_summary.json"))
 
+    # Exp03b contrasts
+    c3b = read_json(base / "exp03b" / "contrasts.json")
+    if c3b:
+        s = c3b.get("summary", {})
+        wandb.log({
+            "exp03b/median_angle_deg": s.get("median_angle_deg"),
+            "exp03b/median_auroc_lda": s.get("median_auroc_lda"),
+            "exp03b/median_auroc_mean_diff": s.get("median_auroc_mean_diff"),
+        })
+        wandb.save(str(base / "exp03b" / "contrasts.json"))
+
+    # Exp05b estimators
+    e5b = read_json(base / "exp05b" / "estimators.json")
+    if e5b:
+        s = e5b.get("summary", {})
+        wandb.log({
+            "exp05b/median_auroc_lda": s.get("median_auroc_lda"),
+            "exp05b/median_auroc_mean_diff": s.get("median_auroc_mean_diff"),
+            "exp05b/median_auroc_l2probe": s.get("median_auroc_l2probe"),
+        })
+        wandb.save(str(base / "exp05b" / "estimators.json"))
+
     # Exp07
     w7 = read_json(base / "exp07" / "whitening_ablation.json")
     if w7:
@@ -159,4 +181,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

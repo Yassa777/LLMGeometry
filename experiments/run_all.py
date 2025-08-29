@@ -28,6 +28,7 @@ def main():
     ap.add_argument("--exp01", action="store_true", help="Run Exp01: angles")
     ap.add_argument("--exp02", action="store_true", help="Run Exp02: ratio invariance")
     ap.add_argument("--exp03", action="store_true", help="Run Exp03: euclid vs causal")
+    ap.add_argument("--exp03b", action="store_true", help="Run Exp03b: contrasts (LDA vs mean-diff)")
     ap.add_argument("--exp04", action="store_true", help="Run Exp04: boundary normals")
     ap.add_argument("--exp05", action="store_true", help="Run Exp05: interventions")
     ap.add_argument("--exp06", action="store_true", help="Run Exp06: fisher/logit")
@@ -38,6 +39,7 @@ def main():
     ap.add_argument("--config01", type=str, default="configs/exp01.yaml")
     ap.add_argument("--config02", type=str, default="configs/exp02.yaml")
     ap.add_argument("--config03", type=str, default="configs/exp03.yaml")
+    ap.add_argument("--config03b", type=str, default="configs/exp03b.yaml")
     ap.add_argument("--config04", type=str, default="configs/exp04.yaml")
     ap.add_argument("--config05", type=str, default="configs/exp05.yaml")
     ap.add_argument("--config06", type=str, default="configs/exp06.yaml")
@@ -68,6 +70,10 @@ def main():
             sys.exit(rc)
     if args.exp04 or do_all:
         rc = run([py, str(root / "exp04_boundary_normals.py"), "--config", args.config04])
+        if rc != 0:
+            sys.exit(rc)
+    if args.exp03b or do_all:
+        rc = run([py, str(root / "exp03_contrasts.py"), "--config", args.config03b])
         if rc != 0:
             sys.exit(rc)
     if args.exp05 or do_all:

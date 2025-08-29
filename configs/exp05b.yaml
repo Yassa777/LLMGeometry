@@ -1,0 +1,11 @@
+inputs:
+  geometry: runs/exp01/geometry.pt
+  activations: runs/exp01/activations.h5
+  teacher_vectors: runs/exp01/teacher_vectors.json
+logging:
+  save_dir: runs/exp05b
+geometry:
+  lda_shrinkage: 0.10
+probe:
+  C: 1.0
+  max_iter: 500

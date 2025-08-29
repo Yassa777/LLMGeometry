@@ -53,24 +53,50 @@ def main():
     out_dir = Path(cfg.get("logging", {}).get("save_dir", "runs/exp07"))
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    model_name = cfg["model"]["name"]
     device = cfg["run"].get("device", "cpu")
-    U = load_unembedding(model_name, device=device)
+    # Support multi-model sweep or single model
+    model_names = []
+    if "models" in cfg:
+        model_names = cfg["models"]
+    else:
+        model_names = [cfg["model"]["name"]]
 
-    teacher = json.load(open(cfg["inputs"]["teacher_vectors"]))
-    parents = teacher["parent_vectors"]
-    deltas = teacher["child_deltas"]
+    # Support multiple teacher_vectors (domains)
+    tv_list = []
+    if "teacher_vectors_list" in cfg.get("inputs", {}):
+        tv_list = cfg["inputs"]["teacher_vectors_list"]
+    else:
+        tv_list = [cfg["inputs"]["teacher_vectors"]]
 
     shrinkages = cfg.get("geometry", {}).get("shrinkages", [0.0, 0.01, 0.05, 0.1])
-    results = {}
-    for s in shrinkages:
-        geom = CausalGeometry(U, shrinkage=float(s))
-        inv = geom.whitening_invariant_stats()
-        med = angle_median(geom, parents, deltas)
-        results[str(s)] = {**inv, "angle_median_deg": med}
+    out_all = {"by_model": {}, "by_dataset": {}}
+
+    for model_name in model_names:
+        U = load_unembedding(model_name, device=device)
+        results = {}
+        # Use first dataset for angles
+        t0 = json.load(open(tv_list[0]))
+        parents = t0["parent_vectors"]
+        deltas = t0["child_deltas"]
+        for s in shrinkages:
+            geom = CausalGeometry(U, shrinkage=float(s))
+            inv = geom.whitening_invariant_stats()
+            med = angle_median(geom, parents, deltas)
+            results[str(s)] = {**inv, "angle_median_deg": med}
+        out_all["by_model"][model_name] = results
+
+    # Dataset sweep using fixed geometry from first model
+    U = load_unembedding(model_names[0], device=device)
+    geom0 = CausalGeometry(U, shrinkage=float(shrinkages[0]))
+    for path in tv_list:
+        teacher = json.load(open(path))
+        parents = teacher["parent_vectors"]
+        deltas = teacher["child_deltas"]
+        med = angle_median(geom0, parents, deltas)
+        out_all["by_dataset"][str(path)] = {"angle_median_deg": med}
 
     with open(out_dir / "whitening_ablation.json", "w") as f:
-        json.dump({"results": results}, f, indent=2)
+        json.dump(out_all, f, indent=2)
     print("Saved:", out_dir / "whitening_ablation.json")
 
 

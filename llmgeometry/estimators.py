@@ -118,3 +118,59 @@ class ConceptVectorEstimator:
             projectors[pid] = (down, up)
         return projectors
 
+
+class MeanDiffEstimator:
+    def __init__(self, class_balance: bool = True):
+        self.class_balance = class_balance
+
+    def estimate_binary_direction(
+        self,
+        X_pos: torch.Tensor,
+        X_neg: torch.Tensor,
+        geometry,
+        normalize: bool = True,
+    ) -> torch.Tensor:
+        Xp = geometry.whiten(X_pos.to(torch.float32))
+        Xn = geometry.whiten(X_neg.to(torch.float32))
+        if self.class_balance:
+            n = min(len(Xp), len(Xn))
+            Xp, Xn = Xp[:n], Xn[:n]
+        mu_p = Xp.mean(dim=0)
+        mu_n = Xn.mean(dim=0)
+        w_w = (mu_p - mu_n)
+        # Map back to original space using W^{-T}
+        Wt_inv = torch.linalg.inv(geometry.W.to(torch.float32).t())
+        direction_orig = (w_w @ Wt_inv).to(torch.float32)
+        if normalize:
+            direction_orig = geometry.normalize_causal(direction_orig)
+        return direction_orig
+
+
+class L2ProbeEstimator:
+    def __init__(self, C: float = 1.0, max_iter: int = 500):
+        self.C = C
+        self.max_iter = max_iter
+
+    def estimate_binary_direction(
+        self,
+        X_pos: torch.Tensor,
+        X_neg: torch.Tensor,
+        geometry,
+        normalize: bool = True,
+    ) -> torch.Tensor:
+        from sklearn.linear_model import LogisticRegression
+
+        Xp = geometry.whiten(X_pos.to(torch.float32))
+        Xn = geometry.whiten(X_neg.to(torch.float32))
+        n = min(len(Xp), len(Xn))
+        Xp, Xn = Xp[:n], Xn[:n]
+        X = torch.cat([Xp, Xn], dim=0).numpy()
+        y = torch.cat([torch.ones(n), torch.zeros(n)]).numpy()
+        clf = LogisticRegression(max_iter=self.max_iter, C=self.C, solver="lbfgs")
+        clf.fit(X, y)
+        w_w = torch.tensor(clf.coef_[0], dtype=torch.float32)
+        Wt_inv = torch.linalg.inv(geometry.W.to(torch.float32).t())
+        direction_orig = (w_w @ Wt_inv).to(torch.float32)
+        if normalize:
+            direction_orig = geometry.normalize_causal(direction_orig)
+        return direction_orig

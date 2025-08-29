@@ -14,17 +14,17 @@ Save per-parent median angles and an overall summary.
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 import numpy as np
 import torch
 import yaml
 from sklearn.linear_model import LogisticRegression
+from scipy.optimize import nnls
 
 from llmgeometry import CausalGeometry
-from llmgeometry.loaders import load_geometry, load_teacher_vectors, load_hierarchies, load_activations, save_json
+from llmgeometry.loaders import load_geometry, load_teacher_vectors, load_activations, save_json
 
 
 def fit_normals_for_parent(
@@ -45,11 +45,12 @@ def fit_normals_for_parent(
     k_energy = int((torch.cumsum(S, dim=0) / (S.sum() + 1e-12) <= 0.85).sum().item()) + 1
     k = min(subspace_dim, V.shape[1], k_energy)
     Vk = V[:, :k]             # [d, k]
-    down = Vk.t()             # [k, d]
     up = Vk                   # [d, k]
 
     # Prepare dataset: gather pos/neg per child c under this parent
     angles: Dict[str, float] = {}
+    nnls_r2: Dict[str, float] = {}
+    bary_r2: Dict[str, float] = {}
     for cid, cvec in child_vecs.items():
         # Skip if missing activations
         if cid not in acts:
@@ -77,7 +78,29 @@ def fit_normals_for_parent(
         ang = torch.rad2deg(geom.causal_angle(normal_full, delta)).item()
         angles[cid] = ang
 
-    return angles
+    # After gathering all children with activations, compute NNLS/barycentric R^2 on deltas
+    valid_children = [cid for cid in child_deltas.keys() if cid in angles]
+    if len(valid_children) >= 2:
+        D = torch.stack([geom.normalize_causal(child_deltas[c].to(torch.float32)) for c in valid_children])  # [k, d]
+        Dw = geom.whiten(D)  # work in causal space
+        for i, cid in enumerate(valid_children):
+            y = Dw[i].numpy()
+            X = Dw[[j for j in range(len(valid_children)) if j != i]].numpy().T  # [d, k-1]
+            coef, _ = nnls(X, y)
+            y_hat = X @ coef
+            ss_res = float(np.sum((y - y_hat) ** 2))
+            ss_tot = float(np.sum((y - y.mean()) ** 2) + 1e-8)
+            nnls_r2[cid] = 1.0 - ss_res / ss_tot
+            # Barycentric: normalize NNLS coef to sum=1 if sum>0
+            if coef.sum() > 1e-8:
+                bcoef = coef / coef.sum()
+                yb = X @ bcoef
+                ss_res_b = float(np.sum((y - yb) ** 2))
+                bary_r2[cid] = 1.0 - ss_res_b / ss_tot
+            else:
+                bary_r2[cid] = float("nan")
+
+    return angles, nnls_r2, bary_r2
 
 
 def main():
@@ -99,7 +122,7 @@ def main():
     per_parent: Dict[str, Dict[str, float]] = {}
     medians: Dict[str, float] = {}
     for pid, child_vecs in child_vecs_all.items():
-        angles = fit_normals_for_parent(
+        angles, nnls_r2, bary_r2 = fit_normals_for_parent(
             geom,
             pid,
             child_vecs,
@@ -108,7 +131,7 @@ def main():
             subspace_dim=subspace_dim,
         )
         if angles:
-            per_parent[pid] = angles
+            per_parent[pid] = {"angles": angles, "nnls_r2": nnls_r2, "barycentric_r2": bary_r2}
             medians[pid] = float(np.median(list(angles.values())))
 
     summary = {
@@ -116,6 +139,12 @@ def main():
         "median_of_medians": (float(np.median(list(medians.values()))) if medians else float("nan")),
         "per_parent_median": medians,
     }
+    # Simplex/polytope summaries
+    nnls_all = [v for d in per_parent.values() for v in d.get("nnls_r2", {}).values()]
+    bary_all = [v for d in per_parent.values() for v in d.get("barycentric_r2", {}).values()]
+    summary["nnls_r2_median"] = float(np.median(nnls_all)) if nnls_all else float("nan")
+    summary["barycentric_r2_median"] = float(np.median(bary_all)) if bary_all else float("nan")
+
     out = {"per_parent": per_parent, "summary": summary}
     save_json(out, str(out_dir / "boundary_normals.json"))
     print("Saved:", out_dir / "boundary_normals.json")
@@ -123,4 +152,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
