@@ -593,6 +593,10 @@ def fig_emergence_curves(path: str, out_path: str) -> None:
     data = json.load(open(path))
     a = data.get("angle_vs_layer", {})
     k = data.get("kl_vs_layer", {})
+    aq25 = data.get("angle_vs_layer_q25", {})
+    aq75 = data.get("angle_vs_layer_q75", {})
+    kq25 = data.get("kl_vs_layer_q25", {})
+    kq75 = data.get("kl_vs_layer_q75", {})
     if not a and not k:
         return
     # Layers as ints sorted ascending by depth (use numeric sort of keys)
@@ -600,15 +604,30 @@ def fig_emergence_curves(path: str, out_path: str) -> None:
     ys_a = [float(a.get(str(li), np.nan)) for li in ls]
     ys_k = [float(k.get(str(li), np.nan)) for li in ls]
     fig, axs = plt.subplots(1, 2, figsize=(9, 3.2))
-    axs[0].plot(ls, ys_a, marker="o", color="#1f77b4")
+    axs[0].plot(ls, ys_a, marker="o", color="#1f77b4", label="median")
+    try:
+        ya25 = [float(aq25.get(str(li), np.nan)) for li in ls]
+        ya75 = [float(aq75.get(str(li), np.nan)) for li in ls]
+        axs[0].fill_between(ls, ya25, ya75, color="#1f77b4", alpha=0.15, label="IQR")
+    except Exception:
+        pass
     axs[0].axhline(80, linestyle="--", color="gray", linewidth=1)
     axs[0].set_xlabel("Layer index")
     axs[0].set_ylabel("Median angle (deg)")
     axs[0].set_title("Angle vs layer")
-    axs[1].plot(ls, ys_k, marker="o", color="#ff7f0e")
+    axs[0].legend(frameon=False)
+
+    axs[1].plot(ls, ys_k, marker="o", color="#ff7f0e", label="median")
+    try:
+        yk25 = [float(kq25.get(str(li), np.nan)) for li in ls]
+        yk75 = [float(kq75.get(str(li), np.nan)) for li in ls]
+        axs[1].fill_between(ls, yk25, yk75, color="#ff7f0e", alpha=0.15, label="IQR")
+    except Exception:
+        pass
     axs[1].set_xlabel("Layer index")
     axs[1].set_ylabel("Median KL(base||after)")
     axs[1].set_title("Sibling-KL vs layer")
+    axs[1].legend(frameon=False)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
     fig.savefig(out_path, dpi=200)

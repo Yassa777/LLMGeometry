@@ -134,6 +134,8 @@ def main():
                 angle_vs_layer[int(li)].append(float(ang))
 
     angle_curve = {str(int(li)): (float(np.median(v)) if v else float("nan")) for li, v in angle_vs_layer.items()}
+    angle_q25 = {str(int(li)): (float(np.percentile(v, 25)) if v else float("nan")) for li, v in angle_vs_layer.items()}
+    angle_q75 = {str(int(li)): (float(np.percentile(v, 75)) if v else float("nan")) for li, v in angle_vs_layer.items()}
 
     # KL vs layer: edits at each layer under fixed geometry
     kl_vs_layer: Dict[int, List[float]] = {int(li): [] for li in layers}
@@ -162,10 +164,16 @@ def main():
                 kl_vs_layer[int(li)].append(float(np.median(kl_list)))
 
     kl_curve = {str(int(li)): (float(np.median(v)) if v else float("nan")) for li, v in kl_vs_layer.items()}
+    kl_q25 = {str(int(li)): (float(np.percentile(v, 25)) if v else float("nan")) for li, v in kl_vs_layer.items()}
+    kl_q75 = {str(int(li)): (float(np.percentile(v, 75)) if v else float("nan")) for li, v in kl_vs_layer.items()}
 
     out = {
         "angle_vs_layer": angle_curve,
+        "angle_vs_layer_q25": angle_q25,
+        "angle_vs_layer_q75": angle_q75,
         "kl_vs_layer": kl_curve,
+        "kl_vs_layer_q25": kl_q25,
+        "kl_vs_layer_q75": kl_q75,
         "n_angle_per_layer": {str(int(li)): len(angle_vs_layer[int(li)]) for li in layers},
         "n_kl_per_layer": {str(int(li)): len(kl_vs_layer[int(li)]) for li in layers},
     }

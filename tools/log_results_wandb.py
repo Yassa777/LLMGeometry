@@ -168,6 +168,26 @@ def main():
             wandb.log({f"exp10/layer_{k}_median": v.get("angle_median_deg")})
         wandb.save(str(base / "exp10" / "layer_variants.json"))
 
+    # Exp10b emergence curves
+    em = read_json(base / "exp10b" / "emergence_curves.json")
+    if em:
+        a = em.get("angle_vs_layer", {})
+        aq25 = em.get("angle_vs_layer_q25", {})
+        aq75 = em.get("angle_vs_layer_q75", {})
+        k = em.get("kl_vs_layer", {})
+        kq25 = em.get("kl_vs_layer_q25", {})
+        kq75 = em.get("kl_vs_layer_q75", {})
+        for layer in sorted(set(list(a.keys()) + list(k.keys()))):
+            wandb.log({
+                f"exp10b/angle/median/L{layer}": a.get(layer),
+                f"exp10b/angle/q25/L{layer}": aq25.get(layer),
+                f"exp10b/angle/q75/L{layer}": aq75.get(layer),
+                f"exp10b/kl/median/L{layer}": k.get(layer),
+                f"exp10b/kl/q25/L{layer}": kq25.get(layer),
+                f"exp10b/kl/q75/L{layer}": kq75.get(layer),
+            })
+        wandb.save(str(base / "exp10b" / "emergence_curves.json"))
+
     # Figures
     figs_dir = base / "figures"
     if figs_dir.exists():
