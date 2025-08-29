@@ -17,7 +17,12 @@ import shutil
 import yaml
 
 
-EXPS = [f"exp{str(i).zfill(2)}.yaml" for i in range(1, 11)] + ["exp10b.yaml"]
+EXPS = [f"exp{str(i).zfill(2)}.yaml" for i in range(1, 11)] + [
+    "exp02b.yaml",
+    "exp03b.yaml",
+    "exp05b.yaml",
+    "exp10b.yaml",
+]
 
 
 def override(path_in: Path, path_out: Path, device: str, model: str, n_prompts: int | None) -> None:
