@@ -22,6 +22,7 @@ HIER_JSON=""
 MAX_POS=8
 MAX_NEG=8
 N_PROMPTS=64
+BUILD_POOLED=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -35,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     --max-pos) MAX_POS="$2"; shift 2;;
     --max-neg) MAX_NEG="$2"; shift 2;;
     --n-prompts) N_PROMPTS="$2"; shift 2;;
+    --build-pooled) BUILD_POOLED=1; shift 1;;
     *) echo "Unknown arg: $1"; exit 1;;
   esac
 done
@@ -79,9 +81,45 @@ PYTHONPATH=. python tools/make_gpu_configs.py --device "$DEVICE" --model "$MODEL
 echo "[5/8] Running experiments 01–10..."
 # Exp01 uses exp01.yaml; others read from default configs except those needing device/model overrides.
 PYTHONPATH=. python experiments/exp01_angles.py --config runs/gpu-configs/exp01.yaml
-# Provide a placeholder pooled variant for Exp09 unless user supplies their own
-mkdir -p runs/exp01_pooled
-cp -f runs/exp01/teacher_vectors.json runs/exp01_pooled/teacher_vectors.json
+echo "[5a] Ensuring pooled TV availability for Exp09..."
+if [[ -f runs/exp01_pooled/teacher_vectors.json ]]; then
+  echo "Using existing pooled TV at runs/exp01_pooled/teacher_vectors.json"
+elif [[ "$BUILD_POOLED" == "1" ]]; then
+  echo "Building pooled activations and pooled teacher vectors..."
+  mkdir -p runs/exp01_pooled
+  PYTHONPATH=. python tools/build_activations.py \
+    --model "$MODEL" \
+    --hier runs/exp01/concept_hierarchies.json \
+    --out runs/exp01_pooled/activations.h5 \
+    --device "$DEVICE" \
+    --max-pos "$MAX_POS" \
+    --max-neg "$MAX_NEG" \
+    --granularity pooled
+  # Create pooled config for Exp01 by overriding activations path and save_dir
+  mkdir -p runs/gpu-configs
+  cat > runs/gpu-configs/exp01_pooled.yaml << EOF
+run:
+  device: $DEVICE
+model:
+  name: $MODEL
+geometry:
+  shrinkage: 0.05
+  lda_shrinkage: 0.10
+concepts:
+  file: runs/exp01/concept_hierarchies.json
+data:
+  activations: runs/exp01_pooled/activations.h5
+logging:
+  save_dir: runs/exp01_pooled
+eval:
+  angle_threshold_deg: 80
+EOF
+  PYTHONPATH=. python experiments/exp01_angles.py --config runs/gpu-configs/exp01_pooled.yaml
+else
+  echo "Pooled TV missing and --build-pooled not set; creating placeholder from last-token TV."
+  mkdir -p runs/exp01_pooled
+  cp -f runs/exp01/teacher_vectors.json runs/exp01_pooled/teacher_vectors.json
+fi
 PYTHONPATH=. python experiments/exp02_ratio_invariance.py --config configs/exp02.yaml
 PYTHONPATH=. python experiments/exp03_euclid_vs_causal.py --config configs/exp03.yaml
 PYTHONPATH=. python experiments/exp04_boundary_normals.py --config configs/exp04.yaml

@@ -64,6 +64,21 @@ class ActivationCapture:
         last = acts.gather(dim=1, index=idx).squeeze(1)
         return last.float().cpu()
 
+    def capture_pooled_activations(self, prompts: List[str]) -> torch.Tensor:
+        """Return [B, d] pooled activations over sequence (mean over non-pad tokens)."""
+        inputs = self.tokenizer(
+            prompts, return_tensors="pt", padding=True, truncation=True, max_length=self.config.max_length
+        ).to(self.device)
+        with torch.inference_mode(), torch.autocast(device_type=self.device.type, dtype=self.config.dtype):
+            outputs = self.model(**inputs, output_hidden_states=True)
+            acts = self._final_residual(outputs)  # [B, T, d]
+        mask = inputs["attention_mask"].to(acts.dtype)  # [B, T]
+        mask3 = mask.unsqueeze(-1)  # [B, T, 1]
+        summed = (acts * mask3).sum(dim=1)  # [B, d]
+        counts = mask.sum(dim=1, keepdim=True).clamp_min(1.0)  # [B, 1]
+        pooled = summed / counts
+        return pooled.float().cpu()
+
     @staticmethod
     def save_hierarchical_activations(
         activations: Dict[str, Dict[str, torch.Tensor]], filepath: str
@@ -86,4 +101,3 @@ class ActivationCapture:
                     k: torch.from_numpy(grp[k][...]) for k in grp.keys() if k in ("pos", "neg")
                 }
         return out
-

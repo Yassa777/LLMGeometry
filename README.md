@@ -33,9 +33,10 @@ HF models and a simple Phase-1-style pipeline.
      --hf-token $HUGGINGFACE_HUB_TOKEN \
      --wandb-key $WANDB_API_KEY --project LLMGeometry --run-name full_run`
   - Flags:
-    - `--hier /path/to/concept_hierarchies.json` (optional; writes a toy one if omitted)
+    - `--hier /path/to/concept_hierarchies.json` Use your real hierarchy (optional; a toy one is created if omitted for smoke use).
     - `--max-pos/--max-neg` to limit activations per concept (defaults 8)
     - `--n-prompts` to cap prompts for Exp06/Exp10 (default 64)
+    - `--build-pooled` to build a pooled-token variant for Exp09 (otherwise uses placeholder if `runs/exp01_pooled/teacher_vectors.json` absent)
   - Produces:
     - `runs/exp01..exp10/*` JSON results, `runs/figures/*.png`, and (if configured) logs to W&B.
 

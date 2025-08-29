@@ -11,7 +11,7 @@ Usage:
     --model distilgpt2 \
     --hier llmgeometry-repo/runs/exp01/concept_hierarchies.json \
     --out  llmgeometry-repo/runs/exp01/activations.h5 \
-    --device cpu --max-pos 8 --max-neg 8
+    --device cpu --max-pos 8 --max-neg 8 --granularity last
 
 Notes:
   - Negatives are heuristically chosen:
@@ -85,6 +85,7 @@ def main():
     ap.add_argument("--max-pos", type=int, default=8, help="Max positive prompts per concept (truncate)")
     ap.add_argument("--max-neg", type=int, default=8, help="Max negative prompts per concept (truncate)")
     ap.add_argument("--max-length", type=int, default=128)
+    ap.add_argument("--granularity", type=str, default="last", choices=["last", "pooled"], help="Token granularity for activations")
     args = ap.parse_args()
 
     hier = load_concept_hierarchies(args.hier)
@@ -112,8 +113,12 @@ def main():
         if not pps:
             continue
         nps = neg_prompts.get(cid, [])
-        pos_acts = cap.capture_last_token_activations(pps)
-        neg_acts = cap.capture_last_token_activations(nps) if nps else torch.empty(0, pos_acts.size(-1))
+        if args.granularity == "pooled":
+            pos_acts = cap.capture_pooled_activations(pps)
+            neg_acts = cap.capture_pooled_activations(nps) if nps else torch.empty(0, pos_acts.size(-1))
+        else:
+            pos_acts = cap.capture_last_token_activations(pps)
+            neg_acts = cap.capture_last_token_activations(nps) if nps else torch.empty(0, pos_acts.size(-1))
         concept_acts[cid] = {"pos": pos_acts, "neg": neg_acts}
 
     # Save
